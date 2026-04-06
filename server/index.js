@@ -38,7 +38,7 @@ async function startServer() {
   const server = createServer(app);
 
   app.use(cors({
-    origin: ENV.corsOrigin,
+    origin: ENV.corsOrigin.split(",").map(s => s.trim()),
     credentials: true,
   }));
 
