@@ -17,10 +17,14 @@ import {
   Target,
   Star,
   ShieldAlert,
+  Mic,
+  MicOff,
+  Monitor,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useRef, useCallback } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
+import Vapi from "@vapi-ai/web";
 
 function ScenarioBadge({ scenario }) {
   const labels = {
@@ -93,10 +97,63 @@ function formatDate(date) {
 export default function Dashboard() {
   const [, setLocation] = useLocation();
   const [copied, setCopied] = useState(false);
+  const [webCallActive, setWebCallActive] = useState(false);
+  const [webCallConnecting, setWebCallConnecting] = useState(false);
+  const vapiRef = useRef(null);
 
   const { data: calls, isLoading: callsLoading } = useQuery({ queryKey: ["calls"], queryFn: fetchCalls });
   const { data: vapiConfig } = useQuery({ queryKey: ["vapiConfig"], queryFn: fetchVapiConfig });
   const { data: scenarios } = useQuery({ queryKey: ["scenarios"], queryFn: fetchScenarios });
+
+  const startWebCall = useCallback(async () => {
+    if (!vapiConfig?.publicKey) {
+      toast.error("Vapi public key not configured on the server.");
+      return;
+    }
+
+    try {
+      setWebCallConnecting(true);
+      const vapi = new Vapi(vapiConfig.publicKey);
+      vapiRef.current = vapi;
+
+      vapi.on("call-start", () => {
+        setWebCallConnecting(false);
+        setWebCallActive(true);
+        toast.success("Connected! Speak to the AI receptionist.");
+      });
+
+      vapi.on("call-end", () => {
+        setWebCallActive(false);
+        setWebCallConnecting(false);
+        vapiRef.current = null;
+        toast.info("Call ended. Your scorecard will be ready shortly.");
+      });
+
+      vapi.on("error", (err) => {
+        console.error("[Vapi Web] Error:", err);
+        setWebCallActive(false);
+        setWebCallConnecting(false);
+        vapiRef.current = null;
+        toast.error("Call error: " + (err?.message || "Something went wrong"));
+      });
+
+      // Start the call using the assistant configured in Vapi dashboard
+      await vapi.start(vapiConfig.assistantId);
+    } catch (err) {
+      console.error("[Vapi Web] Failed to start:", err);
+      setWebCallConnecting(false);
+      toast.error("Failed to start web call: " + (err?.message || "Unknown error"));
+    }
+  }, [vapiConfig]);
+
+  const endWebCall = useCallback(() => {
+    if (vapiRef.current) {
+      vapiRef.current.stop();
+      vapiRef.current = null;
+    }
+    setWebCallActive(false);
+    setWebCallConnecting(false);
+  }, []);
 
   const recentCalls = calls?.slice(0, 5) ?? [];
   const totalCalls = calls?.length ?? 0;
@@ -178,8 +235,68 @@ export default function Dashboard() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                {vapiConfig?.configured ? (
-                  <>
+                {/* Option 1: Call on Web */}
+                {vapiConfig?.webCallEnabled && (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold uppercase tracking-wide text-primary bg-primary/10 px-2 py-0.5 rounded">Recommended</span>
+                      <span className="text-xs text-muted-foreground">No phone needed</span>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      Practice directly from your browser using your microphone:
+                    </p>
+                    {webCallActive ? (
+                      <Button
+                        onClick={endWebCall}
+                        variant="destructive"
+                        className="w-full gap-2"
+                        size="lg"
+                      >
+                        <MicOff className="w-4 h-4" />
+                        End Call
+                      </Button>
+                    ) : (
+                      <Button
+                        onClick={startWebCall}
+                        disabled={webCallConnecting}
+                        className="w-full gap-2"
+                        size="lg"
+                      >
+                        {webCallConnecting ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Mic className="w-4 h-4" />
+                        )}
+                        {webCallConnecting ? "Connecting..." : "Start Web Call"}
+                      </Button>
+                    )}
+                    {webCallActive && (
+                      <div className="flex items-center gap-2 p-2 rounded-lg bg-green-500/10 border border-green-500/20">
+                        <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                        <span className="text-xs text-green-400 font-medium">Call in progress — speak into your microphone</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Divider between options */}
+                {vapiConfig?.webCallEnabled && vapiConfig?.configured && (
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1 h-px bg-border" />
+                    <span className="text-xs text-muted-foreground">or</span>
+                    <div className="flex-1 h-px bg-border" />
+                  </div>
+                )}
+
+                {/* Option 2: Call by phone */}
+                {vapiConfig?.configured && (
+                  <div className="space-y-3">
+                    {vapiConfig?.webCallEnabled && (
+                      <div className="flex items-center gap-2">
+                        <Monitor className="w-3.5 h-3.5 text-muted-foreground" />
+                        <span className="text-xs text-muted-foreground font-medium">Or call from your phone</span>
+                      </div>
+                    )}
                     <p className="text-sm text-muted-foreground">
                       Call this number from any phone to begin a roleplay session:
                     </p>
@@ -199,6 +316,25 @@ export default function Dashboard() {
                         )}
                       </button>
                     </div>
+                  </div>
+                )}
+
+                {/* Not configured at all */}
+                {!vapiConfig?.configured && !vapiConfig?.webCallEnabled && (
+                  <div className="flex items-start gap-3 p-4 rounded-lg bg-yellow-500/5 border border-yellow-500/20">
+                    <AlertCircle className="w-5 h-5 text-yellow-400 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-sm font-medium text-yellow-400">Vapi Not Configured</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Add your Vapi credentials (VAPI_API_KEY, VAPI_PUBLIC_KEY) in the server environment to enable calling.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Scenarios & instructions — show when any call method is available */}
+                {(vapiConfig?.configured || vapiConfig?.webCallEnabled) && (
+                  <>
                     <div className="space-y-2">
                       <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Available Scenarios</p>
                       {scenarios?.map(s => (
@@ -225,23 +361,13 @@ export default function Dashboard() {
                     </div>
                     <div className="p-3 rounded-lg bg-primary/5 border border-primary/20 text-xs text-muted-foreground space-y-1.5">
                       <p className="font-medium text-foreground">How it works:</p>
-                      <p>1. Call the number above from any phone</p>
+                      <p>1. {vapiConfig?.webCallEnabled ? 'Click "Start Web Call" above' : "Call the phone number above"}{vapiConfig?.configured && vapiConfig?.webCallEnabled ? " or call the phone number" : ""}</p>
                       <p>2. Tell the AI receptionist which scenario you want to practice</p>
                       <p>3. Tell it your preferred difficulty (easy, medium, or hard)</p>
                       <p>4. You'll be connected to the AI prospect — practice your script</p>
                       <p>5. Hang up when done — your scorecard will be ready in ~30 seconds</p>
                     </div>
                   </>
-                ) : (
-                  <div className="flex items-start gap-3 p-4 rounded-lg bg-yellow-500/5 border border-yellow-500/20">
-                    <AlertCircle className="w-5 h-5 text-yellow-400 shrink-0 mt-0.5" />
-                    <div>
-                      <p className="text-sm font-medium text-yellow-400">Vapi Not Configured</p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Add your Vapi credentials (VAPI_API_KEY, VAPI_PHONE_NUMBER_ID, VAPI_PHONE_NUMBER) in the server environment to enable calling.
-                      </p>
-                    </div>
-                  </div>
                 )}
               </CardContent>
             </Card>

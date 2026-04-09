@@ -14,7 +14,10 @@ const router = Router();
 // POST /api/vapi/webhook — single endpoint for all Vapi server events
 router.post("/webhook", async (req, res) => {
   const { message } = req.body;
-  if (!message) return res.status(400).json({ error: "No message in payload" });
+  if (!message) {
+    console.log(`[Vapi] No message in payload. Full body:`, JSON.stringify(req.body).slice(0, 500));
+    return res.status(400).json({ error: "No message in payload" });
+  }
 
   const eventType = message.type;
   console.log(`[Vapi] Event: ${eventType}`);
@@ -26,6 +29,9 @@ router.post("/webhook", async (req, res) => {
 
       case "tool-calls":
         return await handleToolCalls(message, res);
+
+      case "handoff-destination-request":
+        return await handleHandoffRequest(message, res);
 
       case "end-of-call-report":
         return await handleEndOfCallReport(message, res);
@@ -127,62 +133,40 @@ async function handleToolCalls(message, res) {
 
   for (const toolCall of toolCalls) {
     if (toolCall.function?.name === "startTrainingCall") {
-      const { scenario, difficulty } = toolCall.function.arguments || {};
+      const args = toolCall.function.arguments || {};
+      const scenario = args.scenario;
+      const difficulty = args.difficulty || "medium";
 
       if (!scenario || !SCENARIOS[scenario]) {
-        results.push({ toolCallId: toolCall.id, result: "Invalid scenario selected." });
+        results.push({ toolCallId: toolCall.id, result: "Invalid scenario. Please pick from: new_student, parent_enrollment, web_lead_callback, sales_enrollment, renewal_conference, cancellation_save." });
         continue;
       }
 
-      // Look up userId — default to 1 for now (can be enhanced with caller lookup)
       const userId = 1;
 
       // Fetch school settings for prompt customization
       const settings = await getSchoolSettings(userId).catch(() => null);
 
-      // Generate the full system prompt
-      const systemPrompt = getScenarioSystemPrompt(scenario, settings, difficulty || "medium");
+      // Generate the full system prompt for the roleplay character
+      const systemPrompt = getScenarioSystemPrompt(scenario, settings, difficulty);
       const scenarioTitle = SCENARIOS[scenario].title;
 
       // Create call record in DB
       const callDbId = await createCall({
         userId,
         scenario,
-        difficulty: difficulty || "medium",
+        difficulty,
         vapiCallId: call?.id || null,
         status: "in_progress",
       });
 
       console.log(`[Vapi] Starting training: scenario=${scenario}, difficulty=${difficulty}, callDbId=${callDbId}`);
 
-      results.push({ toolCallId: toolCall.id, result: "Connecting you to your training scenario now..." });
-
-      // Return the training assistant that takes over the call
-      return res.json({
-        results,
-        assistant: {
-          model: {
-            provider: "openai",
-            model: "gpt-4o-realtime-preview",
-            messages: [
-              { role: "system", content: systemPrompt },
-            ],
-          },
-          voice: {
-            provider: "openai",
-            voiceId: "coral",
-          },
-          firstMessage: null, // AI speaks first based on the system prompt
-          recordingEnabled: true,
-          silenceTimeoutSeconds: 30,
-          maxDurationSeconds: 600, // 10 minute max
-          metadata: {
-            callDbId: String(callDbId),
-            scenario,
-            difficulty: difficulty || "medium",
-            scenarioTitle,
-          },
-        },
+      // Return the character instructions as the tool result
+      // Riley will adopt this persona for the rest of the call
+      results.push({
+        toolCallId: toolCall.id,
+        result: `IMPORTANT: You are now switching roles. Stop being the receptionist. From this moment, adopt the following character and follow these instructions exactly. Do NOT mention that you are an AI or a receptionist. Stay in character for the rest of the call.\n\n${systemPrompt}`,
       });
     } else {
       results.push({ toolCallId: toolCall.id, result: "Unknown function." });
@@ -190,6 +174,79 @@ async function handleToolCalls(message, res) {
   }
 
   res.json({ results });
+}
+
+async function handleHandoffRequest(message, res) {
+  console.log(`[Vapi] Handoff request payload:`, JSON.stringify(message, null, 2));
+  const call = message.call;
+  const vapiCallId = call?.id;
+  const handoffData = message.parameters || message.toolCall?.function?.arguments || {};
+
+  // Extract scenario/difficulty from the handoff tool arguments
+  const scenario = handoffData.scenario || "new_student";
+  const difficulty = handoffData.difficulty || "medium";
+
+  if (!SCENARIOS[scenario]) {
+    console.warn("[Vapi] handoff-destination-request: invalid scenario", scenario);
+    return res.json({ error: "Invalid scenario" });
+  }
+
+  const userId = 1;
+
+  // Create call record in DB
+  const callDbId = await createCall({
+    userId,
+    scenario,
+    difficulty,
+    vapiCallId: vapiCallId || null,
+    status: "in_progress",
+  });
+
+  // Fetch school settings for prompt customization
+  const settings = await getSchoolSettings(userId).catch(() => null);
+
+  // Generate the full system prompt
+  const systemPrompt = getScenarioSystemPrompt(scenario, settings, difficulty);
+  const scenarioTitle = SCENARIOS[scenario].title;
+
+  console.log(`[Vapi] Handoff: scenario=${scenario}, difficulty=${difficulty}, callDbId=${callDbId}`);
+
+  // First messages for each scenario (what the AI character says first)
+  const firstMessages = {
+    new_student: "Hey, I was just calling to get some info about your adult classes?",
+    parent_enrollment: "Hi, yeah — I'm calling about your kids' program? I'm thinking about enrolling my son.",
+    web_lead_callback: null, // Staff is calling the lead, so the AI answers "Hello?"
+    sales_enrollment: "Yeah, the class was really good! I liked it.",
+    renewal_conference: "Yeah, Tyler's been really enjoying it. I'm glad we tried it.",
+    cancellation_save: "Hi, I'm calling because I need to cancel Cameron's membership.",
+  };
+
+  const response = {
+    destination: {
+      type: "assistant",
+      assistantName: scenarioTitle,
+      description: `Training scenario: ${scenarioTitle} (${difficulty})`,
+      assistant: {
+        model: {
+          provider: "openai",
+          model: "gpt-4o-mini",
+          messages: [
+            { role: "system", content: systemPrompt },
+          ],
+        },
+        voice: {
+          provider: "vapi",
+          voiceId: "Elliot",
+        },
+        firstMessage: firstMessages[scenario] ?? "Hello?",
+        silenceTimeoutSeconds: 30,
+        maxDurationSeconds: 600,
+      },
+    },
+  };
+
+  console.log(`[Vapi] Handoff response:`, JSON.stringify(response).slice(0, 500));
+  res.json(response);
 }
 
 async function handleEndOfCallReport(message, res) {

@@ -17,6 +17,7 @@ export const ENV = {
 
   // Vapi
   vapiApiKey: process.env.VAPI_API_KEY || "",
+  vapiPublicKey: process.env.VAPI_PUBLIC_KEY || "",
   vapiPhoneNumberId: process.env.VAPI_PHONE_NUMBER_ID || "",
   vapiPhoneNumber: process.env.VAPI_PHONE_NUMBER || "",
 };

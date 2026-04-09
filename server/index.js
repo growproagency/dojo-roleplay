@@ -59,7 +59,7 @@ async function startServer() {
   app.use("/api/leaderboard", leaderboardRouter);
   app.use("/api/admin", adminRouter);
   app.use("/api/system", systemRouter);
-  app.use("/api/vapi", vapiConfigRouter);
+  app.use("/api/vapi-config", vapiConfigRouter);
 
   const port = await findAvailablePort(ENV.port);
 

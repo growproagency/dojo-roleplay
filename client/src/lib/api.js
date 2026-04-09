@@ -51,4 +51,4 @@ export const fetchUsage = (params) => {
   const query = qs.toString();
   return apiFetch(`/admin/usage${query ? `?${query}` : ""}`);
 };
-export const fetchVapiConfig = () => apiFetch("/vapi/config");
+export const fetchVapiConfig = () => apiFetch("/vapi-config");
