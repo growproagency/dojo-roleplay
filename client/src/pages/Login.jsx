@@ -16,6 +16,14 @@ export default function Login() {
   const [isSignUp, setIsSignUp] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  // If the user came from an invite link, send them back there after auth
+  const pendingInviteToken = typeof window !== "undefined"
+    ? sessionStorage.getItem("dojo:pendingInviteToken")
+    : null;
+  const postLoginPath = pendingInviteToken
+    ? `/invite/${pendingInviteToken}`
+    : "/dashboard";
+
   const handleEmailAuth = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -27,7 +35,7 @@ export default function Login() {
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
-        setLocation("/dashboard");
+        setLocation(postLoginPath);
       }
     } catch (err) {
       toast.error(err.message || "Authentication failed");
@@ -39,7 +47,7 @@ export default function Login() {
   const handleOAuthLogin = async (provider) => {
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
-      options: { redirectTo: `${window.location.origin}/dashboard` },
+      options: { redirectTo: `${window.location.origin}${postLoginPath}` },
     });
     if (error) toast.error(error.message);
   };

@@ -21,19 +21,24 @@ import {
 } from "@/components/ui/sidebar";
 import { getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { LayoutDashboard, LogOut, PanelLeft, Phone, Settings, Trophy, BarChart3, Sun, Moon } from "lucide-react";
+import { LayoutDashboard, LogOut, PanelLeft, Phone, Settings, Trophy, BarChart3, Sun, Moon, Users, User } from "lucide-react";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 import { Button } from "./ui/button";
 
+// `requires` controls visibility:
+//   undefined         → visible to all authenticated users
+//   "schoolAdmin"     → visible to school admins (and global admins)
+//   "globalAdmin"     → visible only to global admins
 const menuItems = [
-  { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard", adminOnly: false },
-  { icon: Phone, label: "Call History", path: "/calls", adminOnly: false },
-  { icon: Trophy, label: "Leaderboard", path: "/leaderboard", adminOnly: false },
-  { icon: BarChart3, label: "Usage & Billing", path: "/usage", adminOnly: true },
-  { icon: Settings, label: "School Settings", path: "/settings", adminOnly: false },
+  { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
+  { icon: Phone, label: "Call History", path: "/calls" },
+  { icon: Trophy, label: "Leaderboard", path: "/leaderboard" },
+  { icon: Users, label: "Members", path: "/members", requires: "schoolAdmin" },
+  { icon: Settings, label: "School Settings", path: "/settings", requires: "schoolAdmin" },
+  { icon: BarChart3, label: "Usage & Billing", path: "/usage", requires: "globalAdmin" },
 ];
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";
@@ -116,7 +121,7 @@ function DashboardLayoutContent({
   children,
   setSidebarWidth,
 }) {
-  const { user, logout } = useAuth();
+  const { user, isSchoolAdmin, isGlobalAdmin, logout } = useAuth();
   const [location, setLocation] = useLocation();
   const { state, toggleSidebar } = useSidebar();
   const isCollapsed = state === "collapsed";
@@ -124,6 +129,13 @@ function DashboardLayoutContent({
   const sidebarRef = useRef(null);
   const activeMenuItem = menuItems.find(item => item.path === location);
   const isMobile = useIsMobile();
+
+  const visibleMenuItems = menuItems.filter(item => {
+    if (!item.requires) return true;
+    if (item.requires === "globalAdmin") return isGlobalAdmin;
+    if (item.requires === "schoolAdmin") return isSchoolAdmin;
+    return false;
+  });
 
   useEffect(() => {
     if (isCollapsed) {
@@ -190,7 +202,7 @@ function DashboardLayoutContent({
 
           <SidebarContent className="gap-0">
             <SidebarMenu className="px-2 py-1">
-              {menuItems.filter(item => !item.adminOnly || user?.role === "admin").map(item => {
+              {visibleMenuItems.map(item => {
                 const isActive = location === item.path;
                 return (
                   <SidebarMenuItem key={item.path}>
@@ -231,6 +243,13 @@ function DashboardLayoutContent({
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem
+                  onClick={() => setLocation("/profile")}
+                  className="cursor-pointer"
+                >
+                  <User className="mr-2 h-4 w-4" />
+                  <span>My profile</span>
+                </DropdownMenuItem>
                 <ThemeToggleItem />
                 <DropdownMenuItem
                   onClick={logout}

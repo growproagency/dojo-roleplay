@@ -201,6 +201,17 @@ export async function setUserSchool(userId, schoolId, role) {
   if (error) throw error;
 }
 
+export async function updateUserProfile(userId, data) {
+  const sb = getSupabase();
+  if (!sb) throw new Error("Supabase not available");
+  const row = {};
+  if (data.name !== undefined) row.name = data.name;
+  if (data.phoneNumber !== undefined) row.phone_number = data.phoneNumber || null;
+  if (Object.keys(row).length === 0) return;
+  const { error } = await sb.from("users").update(row).eq("id", userId);
+  if (error) throw error;
+}
+
 // ---- Calls ----
 
 export async function createCall(data) {
@@ -271,16 +282,24 @@ export async function getCallById(id) {
   return data ? toCallCamel(data) : undefined;
 }
 
+function attachScore(callRow) {
+  const camel = toCallCamel(callRow);
+  // Supabase nested select returns scorecards as an array (could be empty)
+  const scorecards = Array.isArray(callRow.scorecards) ? callRow.scorecards : [];
+  camel.overallScore = scorecards.length > 0 ? scorecards[0].overall_score ?? null : null;
+  return camel;
+}
+
 export async function getCallsByUser(userId) {
   const sb = getSupabase();
   if (!sb) return [];
   const { data, error } = await sb
     .from("calls")
-    .select("*")
+    .select("*, scorecards(overall_score)")
     .eq("user_id", userId)
     .order("created_at", { ascending: false });
   if (error) { console.error("[Database] getCallsByUser error:", error); return []; }
-  return (data || []).map(toCallCamel);
+  return (data || []).map(attachScore);
 }
 
 export async function getCallsBySchool(schoolId) {
@@ -288,11 +307,11 @@ export async function getCallsBySchool(schoolId) {
   if (!sb || !schoolId) return [];
   const { data, error } = await sb
     .from("calls")
-    .select("*")
+    .select("*, scorecards(overall_score)")
     .eq("school_id", schoolId)
     .order("created_at", { ascending: false });
   if (error) { console.error("[Database] getCallsBySchool error:", error); return []; }
-  return (data || []).map(toCallCamel);
+  return (data || []).map(attachScore);
 }
 
 // ---- Scorecards ----

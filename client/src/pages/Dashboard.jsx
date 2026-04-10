@@ -1,5 +1,5 @@
 import DashboardLayout from "@/components/DashboardLayout";
-import { fetchCalls, fetchVapiConfig, fetchScenarios } from "@/lib/api";
+import { fetchCalls, fetchVapiConfig, fetchScenarios, fetchVapiSessionToken } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -113,6 +113,17 @@ export default function Dashboard() {
 
     try {
       setWebCallConnecting(true);
+
+      // Fetch a short-lived signed session token so the webhook can identify
+      // the tenant (user + school) for this web call.
+      let sessionToken = null;
+      try {
+        const tokenRes = await fetchVapiSessionToken();
+        sessionToken = tokenRes?.token ?? null;
+      } catch (err) {
+        console.warn("[Vapi Web] Failed to fetch session token, continuing without:", err);
+      }
+
       const vapi = new Vapi(vapiConfig.publicKey);
       vapiRef.current = vapi;
 
@@ -137,8 +148,13 @@ export default function Dashboard() {
         toast.error("Call error: " + (err?.message || "Something went wrong"));
       });
 
-      // Start the call using the assistant configured in Vapi dashboard
-      await vapi.start(vapiConfig.assistantId);
+      // Start the call using the assistant configured in Vapi dashboard.
+      // Pass the session token via assistantOverrides.metadata so the server
+      // can verify it on assistant-request / handoff events.
+      const startOptions = sessionToken
+        ? { metadata: { sessionToken } }
+        : undefined;
+      await vapi.start(vapiConfig.assistantId, startOptions);
     } catch (err) {
       console.error("[Vapi Web] Failed to start:", err);
       setWebCallConnecting(false);
@@ -157,9 +173,9 @@ export default function Dashboard() {
 
   const recentCalls = calls?.slice(0, 5) ?? [];
   const totalCalls = calls?.length ?? 0;
-  const scoredCalls = calls?.filter(c => c.status === "scored") ?? [];
+  const scoredCalls = calls?.filter(c => c.status === "scored" && typeof c.overallScore === "number") ?? [];
   const avgScore = scoredCalls.length > 0
-    ? Math.round(scoredCalls.reduce((sum, _) => sum + 0, 0) / scoredCalls.length)
+    ? Math.round(scoredCalls.reduce((sum, c) => sum + c.overallScore, 0) / scoredCalls.length)
     : null;
 
   const copyPhone = () => {

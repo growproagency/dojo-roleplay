@@ -68,6 +68,7 @@ async function resolveTenantContext(message) {
     if (payload && payload.userId && payload.schoolId) {
       const ctx = { userId: payload.userId, schoolId: payload.schoolId };
       setCallContext(vapiCallId, ctx);
+      console.log(`[Vapi] Tenant from session token: userId=${ctx.userId}, schoolId=${ctx.schoolId} (call ${vapiCallId})`);
       return ctx;
     }
     if (payload) {
