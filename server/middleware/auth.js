@@ -65,16 +65,85 @@ export function requireUser(req, res, next) {
   next();
 }
 
+// ---- Role helpers ----
+// Roles: 'global_admin', 'school_admin', 'staff'
+// Backwards-compat: legacy 'admin' is treated as 'global_admin'.
+
+function isGlobalAdmin(user) {
+  return user?.role === "global_admin" || user?.role === "admin";
+}
+
+function isSchoolAdmin(user) {
+  return user?.role === "school_admin";
+}
+
 /**
- * Requires an authenticated admin. Returns 403 if not admin.
+ * Requires a global platform admin. Returns 403 otherwise.
  */
-export function requireAdmin(req, res, next) {
+export function requireGlobalAdmin(req, res, next) {
   const user = req.user;
-  if (!user) {
-    return res.status(401).json({ message: UNAUTHED_ERR_MSG });
-  }
-  if (user.role !== "admin") {
+  if (!user) return res.status(401).json({ message: UNAUTHED_ERR_MSG });
+  if (!isGlobalAdmin(user)) {
     return res.status(403).json({ message: NOT_ADMIN_ERR_MSG });
   }
   next();
 }
+
+/**
+ * Requires a school admin OR a global admin. Returns 403 otherwise.
+ */
+export function requireSchoolAdmin(req, res, next) {
+  const user = req.user;
+  if (!user) return res.status(401).json({ message: UNAUTHED_ERR_MSG });
+  if (!isSchoolAdmin(user) && !isGlobalAdmin(user)) {
+    return res.status(403).json({ message: NOT_ADMIN_ERR_MSG });
+  }
+  next();
+}
+
+/**
+ * Requires the user to be a member of any school (i.e., have school_id set).
+ * Global admins are exempt.
+ */
+export function requireSchoolMember(req, res, next) {
+  const user = req.user;
+  if (!user) return res.status(401).json({ message: UNAUTHED_ERR_MSG });
+  if (!user.schoolId && !isGlobalAdmin(user)) {
+    return res.status(403).json({ message: "You must belong to a school to access this resource (10003)" });
+  }
+  next();
+}
+
+/**
+ * Factory: requires the requester to be in the same school as a resource.
+ * Global admins are always allowed.
+ *
+ * @param {Function} resolveSchoolId - async (req) => Promise<number|null>
+ *        Returns the school_id of the resource being accessed.
+ */
+export function requireSameSchool(resolveSchoolId) {
+  return async function (req, res, next) {
+    const user = req.user;
+    if (!user) return res.status(401).json({ message: UNAUTHED_ERR_MSG });
+    if (isGlobalAdmin(user)) return next();
+    try {
+      const resourceSchoolId = await resolveSchoolId(req);
+      if (resourceSchoolId == null) {
+        return res.status(404).json({ message: "Resource not found" });
+      }
+      if (user.schoolId !== resourceSchoolId) {
+        return res.status(403).json({ message: NOT_ADMIN_ERR_MSG });
+      }
+      next();
+    } catch (err) {
+      console.error("[Auth] requireSameSchool error:", err);
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  };
+}
+
+/**
+ * Backwards-compatible alias for requireGlobalAdmin.
+ * @deprecated Use requireGlobalAdmin instead.
+ */
+export const requireAdmin = requireGlobalAdmin;

@@ -2,6 +2,7 @@ import { Router } from "express";
 import { requireUser } from "../middleware/auth.js";
 import {
   getCallsByUser,
+  getCallsBySchool,
   getCallById,
   getScorecardByCallId,
   updateCall,
@@ -12,16 +13,59 @@ import { scoreCallTranscript } from "../scoring.js";
 
 const router = Router();
 
-// GET /api/calls — list user's calls
+function isGlobalAdmin(user) {
+  return user?.role === "global_admin" || user?.role === "admin";
+}
+function isSchoolAdmin(user) {
+  return user?.role === "school_admin";
+}
+
+// GET /api/calls — list calls
+//   Staff:        own calls only
+//   School admin: ?scope=mine|school (default school)
+//   Global admin: optional ?schoolId=N to view a specific school, otherwise platform-wide
 router.get("/", requireUser, async (req, res) => {
   try {
-    const calls = await getCallsByUser(req.user.id);
+    const user = req.user;
+    const scope = req.query.scope === "mine" ? "mine" : "school";
+
+    if (isGlobalAdmin(user)) {
+      const schoolIdParam = req.query.schoolId ? parseInt(req.query.schoolId, 10) : null;
+      if (schoolIdParam) {
+        const calls = await getCallsBySchool(schoolIdParam);
+        return res.json(calls);
+      }
+      // No school specified — return user's own calls (global admins can use ?schoolId= for cross-school)
+      const calls = await getCallsByUser(user.id);
+      return res.json(calls);
+    }
+
+    if (isSchoolAdmin(user)) {
+      if (!user.schoolId) return res.json([]);
+      if (scope === "mine") {
+        const calls = await getCallsByUser(user.id);
+        return res.json(calls);
+      }
+      const calls = await getCallsBySchool(user.schoolId);
+      return res.json(calls);
+    }
+
+    // staff
+    const calls = await getCallsByUser(user.id);
     res.json(calls);
   } catch (err) {
     console.error("[Calls] list error:", err);
     res.status(500).json({ message: "Failed to fetch calls" });
   }
 });
+
+// Authorization helper for a single call
+function canAccessCall(user, call) {
+  if (!call) return false;
+  if (isGlobalAdmin(user)) return true;
+  if (isSchoolAdmin(user)) return call.schoolId === user.schoolId;
+  return call.userId === user.id;
+}
 
 // GET /api/calls/:id — get call + scorecard
 router.get("/:id", requireUser, async (req, res) => {
@@ -30,7 +74,7 @@ router.get("/:id", requireUser, async (req, res) => {
     if (isNaN(callId)) return res.status(400).json({ message: "Invalid call ID" });
 
     const call = await getCallById(callId);
-    if (!call || call.userId !== req.user.id) {
+    if (!canAccessCall(req.user, call)) {
       return res.status(404).json({ message: "Call not found" });
     }
 
@@ -49,7 +93,7 @@ router.post("/:id/score", requireUser, async (req, res) => {
     if (isNaN(callId)) return res.status(400).json({ message: "Invalid call ID" });
 
     const call = await getCallById(callId);
-    if (!call || call.userId !== req.user.id) {
+    if (!canAccessCall(req.user, call)) {
       return res.status(404).json({ message: "Call not found" });
     }
     if (!call.transcription || call.transcription.trim().length < 50) {

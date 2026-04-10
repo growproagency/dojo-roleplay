@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { randomBytes } from "node:crypto";
 import { ENV } from "./config/env.js";
 
 let _supabase = null;
@@ -20,6 +21,8 @@ function toUserCamel(row) {
     name: row.name,
     role: row.role,
     avatarUrl: row.avatar_url,
+    schoolId: row.school_id ?? null,
+    phoneNumber: row.phone_number ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     lastSignedIn: row.last_signed_in,
@@ -31,6 +34,7 @@ function toCallCamel(row) {
   return {
     id: row.id,
     userId: row.user_id,
+    schoolId: row.school_id ?? null,
     scenario: row.scenario,
     difficulty: row.difficulty,
     vapiCallId: row.vapi_call_id,
@@ -43,6 +47,56 @@ function toCallCamel(row) {
     transcriptTurns: row.transcript_turns,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+  };
+}
+
+function toSchoolCamel(row) {
+  if (!row) return undefined;
+  return {
+    id: row.id,
+    name: row.name,
+    slug: row.slug,
+    ownerUserId: row.owner_user_id,
+    streetAddress: row.street_address,
+    city: row.city,
+    state: row.state,
+    zipCode: row.zip_code,
+    introOffer: row.intro_offer,
+    priceRangeLow: row.price_range_low,
+    priceRangeHigh: row.price_range_high,
+    programDirectorName: row.program_director_name,
+    additionalNotes: row.additional_notes,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function toInviteCamel(row) {
+  if (!row) return undefined;
+  return {
+    id: row.id,
+    schoolId: row.school_id,
+    email: row.email,
+    role: row.role,
+    token: row.token,
+    invitedBy: row.invited_by,
+    expiresAt: row.expires_at,
+    acceptedAt: row.accepted_at,
+    revokedAt: row.revoked_at,
+    createdAt: row.created_at,
+  };
+}
+
+function toPhoneAttemptCamel(row) {
+  if (!row) return undefined;
+  return {
+    id: row.id,
+    callerNumber: row.caller_number,
+    vapiCallId: row.vapi_call_id,
+    userId: row.user_id,
+    schoolId: row.school_id,
+    outcome: row.outcome,
+    createdAt: row.created_at,
   };
 }
 
@@ -91,6 +145,8 @@ export async function upsertUser(user) {
   if (user.name !== undefined) row.name = user.name;
   if (user.role !== undefined) row.role = user.role;
   if (user.avatarUrl !== undefined) row.avatar_url = user.avatarUrl;
+  if (user.schoolId !== undefined) row.school_id = user.schoolId;
+  if (user.phoneNumber !== undefined) row.phone_number = user.phoneNumber;
   row.last_signed_in = user.lastSignedIn ?? new Date().toISOString();
 
   const { error } = await sb
@@ -108,20 +164,61 @@ export async function getUserByEmail(email) {
   return data ? toUserCamel(data) : undefined;
 }
 
+export async function getUserById(id) {
+  const sb = getSupabase();
+  if (!sb) return undefined;
+  const { data, error } = await sb.from("users").select("*").eq("id", id).single();
+  if (error && error.code !== "PGRST116") console.error("[Database] getUserById error:", error);
+  return data ? toUserCamel(data) : undefined;
+}
+
+export async function getUserByPhoneNumber(phoneNumber) {
+  const sb = getSupabase();
+  if (!sb || !phoneNumber) return undefined;
+  const { data, error } = await sb.from("users").select("*").eq("phone_number", phoneNumber).single();
+  if (error && error.code !== "PGRST116") console.error("[Database] getUserByPhoneNumber error:", error);
+  return data ? toUserCamel(data) : undefined;
+}
+
+export async function getUsersBySchool(schoolId) {
+  const sb = getSupabase();
+  if (!sb) return [];
+  const { data, error } = await sb
+    .from("users")
+    .select("*")
+    .eq("school_id", schoolId)
+    .order("created_at", { ascending: true });
+  if (error) { console.error("[Database] getUsersBySchool error:", error); return []; }
+  return (data || []).map(toUserCamel);
+}
+
+export async function setUserSchool(userId, schoolId, role) {
+  const sb = getSupabase();
+  if (!sb) throw new Error("Supabase not available");
+  const row = { school_id: schoolId };
+  if (role !== undefined) row.role = role;
+  const { error } = await sb.from("users").update(row).eq("id", userId);
+  if (error) throw error;
+}
+
 // ---- Calls ----
 
 export async function createCall(data) {
   const sb = getSupabase();
   if (!sb) throw new Error("Supabase not available");
+  const row = {
+    user_id: data.userId,
+    scenario: data.scenario,
+    difficulty: data.difficulty,
+    vapi_call_id: data.vapiCallId ?? null,
+    status: data.status ?? "in_progress",
+  };
+  if (data.schoolId !== undefined && data.schoolId !== null) {
+    row.school_id = data.schoolId;
+  }
   const { data: result, error } = await sb
     .from("calls")
-    .insert({
-      user_id: data.userId,
-      scenario: data.scenario,
-      difficulty: data.difficulty,
-      vapi_call_id: data.vapiCallId ?? null,
-      status: data.status ?? "in_progress",
-    })
+    .insert(row)
     .select("id")
     .single();
   if (error) throw error;
@@ -186,6 +283,18 @@ export async function getCallsByUser(userId) {
   return (data || []).map(toCallCamel);
 }
 
+export async function getCallsBySchool(schoolId) {
+  const sb = getSupabase();
+  if (!sb || !schoolId) return [];
+  const { data, error } = await sb
+    .from("calls")
+    .select("*")
+    .eq("school_id", schoolId)
+    .order("created_at", { ascending: false });
+  if (error) { console.error("[Database] getCallsBySchool error:", error); return []; }
+  return (data || []).map(toCallCamel);
+}
+
 // ---- Scorecards ----
 
 export async function createScorecard(data) {
@@ -218,14 +327,16 @@ export async function getScorecardByCallId(callId) {
 
 // ---- Leaderboard (JS aggregation) ----
 
-export async function getLeaderboard() {
+export async function getLeaderboard(schoolId) {
   const sb = getSupabase();
   if (!sb) return [];
 
-  // Fetch all calls with user info
-  const { data: callRows, error: callErr } = await sb
+  // Fetch calls (optionally scoped to a school) with user info
+  let callsQuery = sb
     .from("calls")
-    .select("id, user_id, status, created_at, users!inner(name)");
+    .select("id, user_id, school_id, status, created_at, users!inner(name)");
+  if (schoolId != null) callsQuery = callsQuery.eq("school_id", schoolId);
+  const { data: callRows, error: callErr } = await callsQuery;
   if (callErr) { console.error("[Database] getLeaderboard calls error:", callErr); return []; }
 
   // Fetch all scorecards
@@ -288,35 +399,55 @@ export async function getLeaderboard() {
 }
 
 // ---- School Settings ----
+// Settings live on the `schools` table now. We keep the same camelCase shape
+// (schoolName, streetAddress, etc.) so the scenario prompt builder doesn't need
+// to change.
 
-export async function getSchoolSettings(userId) {
-  const sb = getSupabase();
-  if (!sb) return undefined;
-  const { data, error } = await sb.from("school_settings").select("*").eq("user_id", userId).single();
-  if (error && error.code !== "PGRST116") console.error("[Database] getSchoolSettings error:", error);
-  return data ? toSettingsCamel(data) : undefined;
+function toSettingsCamelFromSchool(school) {
+  if (!school) return undefined;
+  return {
+    id: school.id,
+    schoolId: school.id,
+    schoolName: school.name,
+    streetAddress: school.streetAddress,
+    city: school.city,
+    state: school.state,
+    zipCode: school.zipCode,
+    introOffer: school.introOffer,
+    priceRangeLow: school.priceRangeLow,
+    priceRangeHigh: school.priceRangeHigh,
+    programDirectorName: school.programDirectorName,
+    additionalNotes: school.additionalNotes,
+    createdAt: school.createdAt,
+    updatedAt: school.updatedAt,
+  };
+}
+
+export async function getSchoolSettings(schoolId) {
+  if (schoolId == null) return undefined;
+  const school = await getSchoolById(schoolId);
+  return toSettingsCamelFromSchool(school);
 }
 
 export async function upsertSchoolSettings(data) {
   const sb = getSupabase();
   if (!sb) throw new Error("Supabase not available");
+  if (data.schoolId == null) throw new Error("schoolId is required to update school settings");
 
-  const { error } = await sb
-    .from("school_settings")
-    .upsert({
-      user_id: data.userId,
-      school_name: data.schoolName,
-      street_address: data.streetAddress ?? null,
-      city: data.city ?? null,
-      state: data.state ?? null,
-      zip_code: data.zipCode ?? null,
-      intro_offer: data.introOffer ?? null,
-      price_range_low: data.priceRangeLow ?? null,
-      price_range_high: data.priceRangeHigh ?? null,
-      program_director_name: data.programDirectorName ?? null,
-      additional_notes: data.additionalNotes ?? null,
-    }, { onConflict: "user_id" });
+  const row = {
+    name: data.schoolName,
+    street_address: data.streetAddress ?? null,
+    city: data.city ?? null,
+    state: data.state ?? null,
+    zip_code: data.zipCode ?? null,
+    intro_offer: data.introOffer ?? null,
+    price_range_low: data.priceRangeLow ?? null,
+    price_range_high: data.priceRangeHigh ?? null,
+    program_director_name: data.programDirectorName ?? null,
+    additional_notes: data.additionalNotes ?? null,
+  };
 
+  const { error } = await sb.from("schools").update(row).eq("id", data.schoolId);
   if (error) throw error;
 }
 
@@ -324,16 +455,17 @@ export async function upsertSchoolSettings(data) {
 
 const COST_PER_SECOND = 0.00117;
 
-export async function getUsageSummary(fromDate, toDate) {
+export async function getUsageSummary(fromDate, toDate, schoolId) {
   const sb = getSupabase();
   if (!sb) return {
     totalCalls: 0, completedCalls: 0, totalSeconds: 0, totalMinutes: 0,
     estimatedCostUsd: 0, byScenario: [], byMonth: [],
   };
 
-  let query = sb.from("calls").select("id, scenario, status, duration_seconds, created_at");
+  let query = sb.from("calls").select("id, scenario, status, duration_seconds, created_at, school_id");
   if (fromDate) query = query.gte("created_at", fromDate.toISOString());
   if (toDate) query = query.lte("created_at", toDate.toISOString());
+  if (schoolId != null) query = query.eq("school_id", schoolId);
 
   const { data: rows, error } = await query;
   if (error) { console.error("[Database] getUsageSummary error:", error); return { totalCalls: 0, completedCalls: 0, totalSeconds: 0, totalMinutes: 0, estimatedCostUsd: 0, byScenario: [], byMonth: [] }; }
@@ -382,13 +514,14 @@ export async function getUsageSummary(fromDate, toDate) {
   };
 }
 
-export async function getUsageByUser(fromDate, toDate) {
+export async function getUsageByUser(fromDate, toDate, schoolId) {
   const sb = getSupabase();
   if (!sb) return [];
 
-  let query = sb.from("calls").select("id, user_id, status, duration_seconds, created_at, users!inner(name, email)");
+  let query = sb.from("calls").select("id, user_id, school_id, status, duration_seconds, created_at, users!inner(name, email)");
   if (fromDate) query = query.gte("created_at", fromDate.toISOString());
   if (toDate) query = query.lte("created_at", toDate.toISOString());
+  if (schoolId != null) query = query.eq("school_id", schoolId);
 
   const { data: callRows, error: callErr } = await query;
   if (callErr) { console.error("[Database] getUsageByUser error:", callErr); return []; }
@@ -439,4 +572,163 @@ export async function getUsageByUser(fromDate, toDate) {
       };
     })
     .sort((a, b) => b.totalSeconds - a.totalSeconds);
+}
+
+// ---- Schools ----
+
+export async function getSchoolById(id) {
+  const sb = getSupabase();
+  if (!sb || !id) return undefined;
+  const { data, error } = await sb.from("schools").select("*").eq("id", id).single();
+  if (error && error.code !== "PGRST116") console.error("[Database] getSchoolById error:", error);
+  return data ? toSchoolCamel(data) : undefined;
+}
+
+export async function getSchoolBySlug(slug) {
+  const sb = getSupabase();
+  if (!sb || !slug) return undefined;
+  const { data, error } = await sb.from("schools").select("*").eq("slug", slug).single();
+  if (error && error.code !== "PGRST116") console.error("[Database] getSchoolBySlug error:", error);
+  return data ? toSchoolCamel(data) : undefined;
+}
+
+export async function createSchool({ name, slug, ownerUserId }) {
+  const sb = getSupabase();
+  if (!sb) throw new Error("Supabase not available");
+  const row = { name };
+  if (slug) row.slug = slug;
+  if (ownerUserId) row.owner_user_id = ownerUserId;
+  const { data, error } = await sb.from("schools").insert(row).select("*").single();
+  if (error) throw error;
+  return toSchoolCamel(data);
+}
+
+export async function updateSchool(id, data) {
+  const sb = getSupabase();
+  if (!sb) throw new Error("Supabase not available");
+
+  const keyMap = {
+    name: "name",
+    slug: "slug",
+    ownerUserId: "owner_user_id",
+    streetAddress: "street_address",
+    city: "city",
+    state: "state",
+    zipCode: "zip_code",
+    introOffer: "intro_offer",
+    priceRangeLow: "price_range_low",
+    priceRangeHigh: "price_range_high",
+    programDirectorName: "program_director_name",
+    additionalNotes: "additional_notes",
+  };
+
+  const row = {};
+  for (const [k, v] of Object.entries(data)) {
+    if (v === undefined) continue;
+    const snakeKey = keyMap[k];
+    if (snakeKey) row[snakeKey] = v;
+  }
+
+  if (Object.keys(row).length === 0) return;
+
+  const { error } = await sb.from("schools").update(row).eq("id", id);
+  if (error) throw error;
+}
+
+// ---- School Invites ----
+
+function generateInviteToken() {
+  // 32 bytes -> 64 hex chars (fits in VARCHAR(64))
+  return randomBytes(32).toString("hex");
+}
+
+export async function createInvite({ schoolId, email, role = "staff", invitedBy, expiresInDays = 7 }) {
+  const sb = getSupabase();
+  if (!sb) throw new Error("Supabase not available");
+  const token = generateInviteToken();
+  const expiresAt = new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000).toISOString();
+  const { data, error } = await sb
+    .from("school_invites")
+    .insert({
+      school_id: schoolId,
+      email: email.toLowerCase(),
+      role,
+      token,
+      invited_by: invitedBy ?? null,
+      expires_at: expiresAt,
+    })
+    .select("*")
+    .single();
+  if (error) throw error;
+  return toInviteCamel(data);
+}
+
+export async function getInviteByToken(token) {
+  const sb = getSupabase();
+  if (!sb || !token) return undefined;
+  const { data, error } = await sb.from("school_invites").select("*").eq("token", token).single();
+  if (error && error.code !== "PGRST116") console.error("[Database] getInviteByToken error:", error);
+  return data ? toInviteCamel(data) : undefined;
+}
+
+export async function getPendingInvitesForSchool(schoolId) {
+  const sb = getSupabase();
+  if (!sb) return [];
+  const { data, error } = await sb
+    .from("school_invites")
+    .select("*")
+    .eq("school_id", schoolId)
+    .is("accepted_at", null)
+    .is("revoked_at", null)
+    .order("created_at", { ascending: false });
+  if (error) { console.error("[Database] getPendingInvitesForSchool error:", error); return []; }
+  return (data || []).map(toInviteCamel);
+}
+
+export async function markInviteAccepted(id) {
+  const sb = getSupabase();
+  if (!sb) throw new Error("Supabase not available");
+  const { error } = await sb
+    .from("school_invites")
+    .update({ accepted_at: new Date().toISOString() })
+    .eq("id", id);
+  if (error) throw error;
+}
+
+export async function revokeInvite(id) {
+  const sb = getSupabase();
+  if (!sb) throw new Error("Supabase not available");
+  const { error } = await sb
+    .from("school_invites")
+    .update({ revoked_at: new Date().toISOString() })
+    .eq("id", id);
+  if (error) throw error;
+}
+
+// ---- Phone Call Attempts (audit + rate limit) ----
+
+export async function logPhoneCallAttempt({ callerNumber, vapiCallId, userId, schoolId, outcome }) {
+  const sb = getSupabase();
+  if (!sb) return;
+  const { error } = await sb.from("phone_call_attempts").insert({
+    caller_number: callerNumber,
+    vapi_call_id: vapiCallId ?? null,
+    user_id: userId ?? null,
+    school_id: schoolId ?? null,
+    outcome,
+  });
+  if (error) console.error("[Database] logPhoneCallAttempt error:", error);
+}
+
+export async function countRecentPhoneAttempts(callerNumber, minutes = 60) {
+  const sb = getSupabase();
+  if (!sb || !callerNumber) return 0;
+  const since = new Date(Date.now() - minutes * 60 * 1000).toISOString();
+  const { count, error } = await sb
+    .from("phone_call_attempts")
+    .select("id", { count: "exact", head: true })
+    .eq("caller_number", callerNumber)
+    .gte("created_at", since);
+  if (error) { console.error("[Database] countRecentPhoneAttempts error:", error); return 0; }
+  return count ?? 0;
 }

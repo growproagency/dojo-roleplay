@@ -12,6 +12,8 @@ import callsRouter from "./routes/calls.js";
 import settingsRouter from "./routes/settings.js";
 import leaderboardRouter from "./routes/leaderboard.js";
 import adminRouter from "./routes/admin.js";
+import schoolRouter from "./routes/school.js";
+import invitesRouter from "./routes/invites.js";
 import systemRouter from "./routes/system.js";
 
 function isPortAvailable(port) {
@@ -58,6 +60,8 @@ async function startServer() {
   app.use("/api/settings", settingsRouter);
   app.use("/api/leaderboard", leaderboardRouter);
   app.use("/api/admin", adminRouter);
+  app.use("/api/school", schoolRouter);
+  app.use("/api/invites", invitesRouter);
   app.use("/api/system", systemRouter);
   app.use("/api/vapi-config", vapiConfigRouter);
 

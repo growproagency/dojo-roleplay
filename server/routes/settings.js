@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { z } from "zod/v4";
-import { requireUser } from "../middleware/auth.js";
+import { requireUser, requireSchoolAdmin } from "../middleware/auth.js";
 import { getSchoolSettings, upsertSchoolSettings } from "../db.js";
 
 const router = Router();
@@ -18,10 +18,11 @@ const settingsSchema = z.object({
   additionalNotes: z.string().optional(),
 });
 
-// GET /api/settings — get school settings
+// GET /api/settings — get school settings (any school member can read)
 router.get("/", requireUser, async (req, res) => {
   try {
-    const s = await getSchoolSettings(req.user.id);
+    if (!req.user.schoolId) return res.json(null);
+    const s = await getSchoolSettings(req.user.schoolId);
     res.json(s ?? null);
   } catch (err) {
     console.error("[Settings] get error:", err);
@@ -29,9 +30,13 @@ router.get("/", requireUser, async (req, res) => {
   }
 });
 
-// PUT /api/settings — save school settings
-router.put("/", requireUser, async (req, res) => {
+// PUT /api/settings — save school settings (school_admin or global_admin only)
+router.put("/", requireSchoolAdmin, async (req, res) => {
   try {
+    if (!req.user.schoolId) {
+      return res.status(400).json({ message: "You are not assigned to a school" });
+    }
+
     const parsed = settingsSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ message: "Invalid settings data", errors: parsed.error.issues });
@@ -39,7 +44,7 @@ router.put("/", requireUser, async (req, res) => {
 
     const input = parsed.data;
     await upsertSchoolSettings({
-      userId: req.user.id,
+      schoolId: req.user.schoolId,
       schoolName: input.schoolName,
       streetAddress: input.streetAddress ?? null,
       city: input.city ?? null,

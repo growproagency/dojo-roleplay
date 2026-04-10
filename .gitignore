@@ -109,5 +109,8 @@ temp/
 # Supabase
 supabase/
 
+docs/
+
+
 # Project notes
 todo.md
