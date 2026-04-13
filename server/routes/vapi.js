@@ -418,7 +418,7 @@ async function handleHandoffRequest(message, res) {
   const systemPrompt = getScenarioSystemPrompt(scenario, settings, difficulty);
   const scenarioTitle = SCENARIOS[scenario].title;
 
-  console.log(`[Vapi] Handoff: scenario=${scenario}, difficulty=${difficulty}, callDbId=${callDbId}, schoolId=${tenant.schoolId}`);
+  console.log(`[Vapi] Handoff: scenario=${scenario}, difficulty=${difficulty}, callDbId=${callDbId}, schoolId=${tenant.schoolId}, schoolName=${settings?.schoolName ?? "NO SETTINGS"}`);
 
   // First messages for each scenario (what the AI character says first)
   const firstMessages = {
@@ -431,12 +431,12 @@ async function handleHandoffRequest(message, res) {
   };
 
   const scenarioVoices = {
-    new_student:         { provider: "vapi", voiceId: "Elliot" },    // Jordan — male
-    parent_enrollment:   { provider: "vapi", voiceId: "Emma" },      // Sarah — female
-    web_lead_callback:   { provider: "vapi", voiceId: "Rohan" },     // Alex — male
-    sales_enrollment:    { provider: "vapi", voiceId: "Nico" },      // Marcus — male
-    renewal_conference:  { provider: "vapi", voiceId: "Savannah" },  // Lisa — female
-    cancellation_save:   { provider: "vapi", voiceId: "Clara" },     // Karen — female
+    new_student:         { provider: "vapi", voiceId: "Elliot" },    
+    parent_enrollment:   { provider: "vapi", voiceId: "Emma" },    
+    web_lead_callback:   { provider: "vapi", voiceId: "Rohan" },   
+    sales_enrollment:    { provider: "vapi", voiceId: "Nico" },     
+    renewal_conference:  { provider: "vapi", voiceId: "Savannah" },  
+    cancellation_save:   { provider: "vapi", voiceId: "Clara" },     
   };
 
   const destinationAssistant = {
@@ -479,6 +479,8 @@ async function handleHandoffRequest(message, res) {
 
   res.json(response);
 }
+
+
 
 async function handleEndOfCallReport(message, res) {
   const call = message.call;
