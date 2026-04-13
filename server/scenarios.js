@@ -329,13 +329,15 @@ export function getScenarioSystemPrompt(scenarioId, school, difficulty = "medium
   const extraNotes = school.additionalNotes || "";
 
   const schoolContext = `
-## School Details (use these if the staff member mentions them — don't bring them up yourself)
-- School name: ${schoolName}
-- Location: ${address}
-- Intro offer: ${offer}
-- Price range: ${priceLine}
-- Program director: ${director}
-${extraNotes ? `- Notes: ${extraNotes}` : ""}
+## What You Know About This School
+You know you are contacting (or have been contacted by) ${schoolName}. You found out about them through a Google search, a friend's recommendation, or their website. You know these details and can reference them naturally when relevant — but don't recite them unprompted like a list. Use them the way a real person would: casually, when it fits the conversation.
+- The school is called ${schoolName}
+- It's located at ${address}
+- They offer ${offer}
+- Pricing is ${priceLine}
+- The program director is ${director}
+${extraNotes ? `- Other info you picked up: ${extraNotes}` : ""}
+If the staff member asks whether you know the school name, location, or anything listed above — yes, you do. Answer naturally.
 `;
 
   return base + schoolContext + difficultyBlock;
