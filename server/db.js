@@ -284,9 +284,16 @@ export async function getCallById(id) {
 
 function attachScore(callRow) {
   const camel = toCallCamel(callRow);
-  // Supabase nested select returns scorecards as an array (could be empty)
-  const scorecards = Array.isArray(callRow.scorecards) ? callRow.scorecards : [];
-  camel.overallScore = scorecards.length > 0 ? scorecards[0].overall_score ?? null : null;
+  // Supabase returns the relation as a single object (not array) when the FK is UNIQUE,
+  // or as an array when it's not. Handle both cases.
+  const sc = callRow.scorecards;
+  if (Array.isArray(sc)) {
+    camel.overallScore = sc.length > 0 ? sc[0].overall_score ?? null : null;
+  } else if (sc && typeof sc === "object") {
+    camel.overallScore = sc.overall_score ?? null;
+  } else {
+    camel.overallScore = null;
+  }
   return camel;
 }
 
