@@ -17,6 +17,19 @@ export const ENV = {
 
   // Vapi
   vapiApiKey: process.env.VAPI_API_KEY || "",
+  vapiPublicKey: process.env.VAPI_PUBLIC_KEY || "",
+  vapiAssistantId: process.env.VAPI_ASSISTANT_ID || "",
   vapiPhoneNumberId: process.env.VAPI_PHONE_NUMBER_ID || "",
   vapiPhoneNumber: process.env.VAPI_PHONE_NUMBER || "",
+  // Secret used to sign short-lived session tokens that the client passes
+  // to vapi.start() as metadata. Webhook verifies the signature.
+  vapiSessionSecret: process.env.VAPI_SESSION_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY || "dev-only-secret-do-not-use-in-prod",
+
+  // Multi-tenancy fallback (used by Vapi webhook when no tenant context is found)
+  defaultSchoolId: process.env.DEFAULT_SCHOOL_ID ? parseInt(process.env.DEFAULT_SCHOOL_ID, 10) : null,
+  defaultUserId: process.env.DEFAULT_USER_ID ? parseInt(process.env.DEFAULT_USER_ID, 10) : null,
+
+  // Public URL of this server's Vapi webhook (used in dynamic destination assistant config
+  // so that end-of-call-report and other server events fire after a handoff).
+  vapiWebhookUrl: process.env.VAPI_WEBHOOK_URL || "",
 };

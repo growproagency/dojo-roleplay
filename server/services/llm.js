@@ -103,7 +103,7 @@ export async function invokeLLM(params) {
   const payload = {
     model: ENV.llmModel,
     messages: messages.map(normalizeMessage),
-    max_tokens: 32768,
+    max_tokens: 4096,
   };
 
   if (tools && tools.length > 0) {

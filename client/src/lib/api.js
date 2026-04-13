@@ -36,6 +36,7 @@ export async function apiFetch(path, options = {}) {
 // ---- API endpoints ----
 
 export const fetchMe = () => apiFetch("/auth/me");
+export const updateMe = (data) => apiFetch("/auth/me", { method: "PUT", body: JSON.stringify(data) });
 export const apiLogout = () => apiFetch("/auth/logout", { method: "POST" });
 export const fetchScenarios = () => apiFetch("/scenarios");
 export const fetchCalls = () => apiFetch("/calls");
@@ -51,4 +52,20 @@ export const fetchUsage = (params) => {
   const query = qs.toString();
   return apiFetch(`/admin/usage${query ? `?${query}` : ""}`);
 };
-export const fetchVapiConfig = () => apiFetch("/vapi/config");
+export const fetchVapiConfig = () => apiFetch("/vapi-config");
+export const fetchVapiSessionToken = () => apiFetch("/vapi-config/session-token", { method: "POST" });
+
+// ---- School & members ----
+export const fetchSchool = () => apiFetch("/school");
+export const updateSchool = (data) => apiFetch("/school", { method: "PUT", body: JSON.stringify(data) });
+export const fetchSchoolMembers = () => apiFetch("/school/members");
+export const removeSchoolMember = (userId) => apiFetch(`/school/members/${userId}`, { method: "DELETE" });
+
+// ---- Invites (school admin) ----
+export const fetchSchoolInvites = () => apiFetch("/school/invites");
+export const createSchoolInvite = (data) => apiFetch("/school/invites", { method: "POST", body: JSON.stringify(data) });
+export const revokeSchoolInvite = (id) => apiFetch(`/school/invites/${id}`, { method: "DELETE" });
+
+// ---- Invite acceptance (public + authenticated) ----
+export const fetchInvitePreview = (token) => apiFetch(`/invites/${token}`);
+export const acceptInvite = (token) => apiFetch(`/invites/${token}/accept`, { method: "POST" });

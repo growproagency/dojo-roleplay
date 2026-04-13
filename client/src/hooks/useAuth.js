@@ -41,11 +41,24 @@ export function useAuth(options) {
   }, [logoutMutation, queryClient]);
 
   const state = useMemo(() => {
+    const user = meQuery.data ?? null;
+    const role = user?.role ?? null;
+    // Treat legacy "admin" the same as "global_admin" for backwards compatibility.
+    const isGlobalAdmin = role === "global_admin" || role === "admin";
+    const isSchoolAdmin = role === "school_admin" || isGlobalAdmin;
+    const isStaff = Boolean(role);
+
     return {
-      user: meQuery.data ?? null,
+      user,
+      role,
+      school: user?.school ?? null,
+      schoolId: user?.schoolId ?? null,
+      isGlobalAdmin,
+      isSchoolAdmin,
+      isStaff,
       loading: meQuery.isLoading || logoutMutation.isPending,
       error: meQuery.error ?? logoutMutation.error ?? null,
-      isAuthenticated: Boolean(meQuery.data),
+      isAuthenticated: Boolean(user),
     };
   }, [
     meQuery.data,
