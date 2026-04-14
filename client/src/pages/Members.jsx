@@ -14,6 +14,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -29,6 +37,7 @@ import {
   CheckCircle2,
   ShieldAlert,
   UserPlus,
+  AlertTriangle,
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -60,6 +69,8 @@ export default function Members() {
   const [inviteRole, setInviteRole] = useState("staff");
   const [copiedToken, setCopiedToken] = useState(null);
   const [lastInviteUrl, setLastInviteUrl] = useState(null);
+  const [removeTarget, setRemoveTarget] = useState(null);
+  const [revokeTarget, setRevokeTarget] = useState(null);
 
   const { data: members, isLoading: membersLoading } = useQuery({
     queryKey: ["school", "members"],
@@ -89,6 +100,7 @@ export default function Members() {
     mutationFn: revokeSchoolInvite,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["school", "invites"] });
+      setRevokeTarget(null);
       toast.success("Invite revoked");
     },
     onError: (err) => toast.error(err.message || "Failed to revoke invite"),
@@ -98,6 +110,7 @@ export default function Members() {
     mutationFn: removeSchoolMember,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["school", "members"] });
+      setRemoveTarget(null);
       toast.success("Member removed from school");
     },
     onError: (err) => toast.error(err.message || "Failed to remove member"),
@@ -124,13 +137,11 @@ export default function Members() {
       toast.error("You cannot remove yourself");
       return;
     }
-    if (!confirm(`Remove ${member.name || member.email} from the school?`)) return;
-    removeMemberMutation.mutate(member.id);
+    setRemoveTarget(member);
   };
 
   const handleRevokeInvite = (invite) => {
-    if (!confirm(`Revoke the invite for ${invite.email}?`)) return;
-    revokeInviteMutation.mutate(invite.id);
+    setRevokeTarget(invite);
   };
 
   if (!isSchoolAdmin) {
@@ -370,6 +381,64 @@ export default function Members() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Remove member modal */}
+      <Dialog open={!!removeTarget} onOpenChange={(open) => { if (!open) setRemoveTarget(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-yellow-500" />
+              Remove member
+            </DialogTitle>
+            <DialogDescription>
+              Remove <strong>{removeTarget?.name || removeTarget?.email}</strong> from the school? They will keep their account but lose access.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setRemoveTarget(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => removeMemberMutation.mutate(removeTarget?.id)}
+              disabled={removeMemberMutation.isPending}
+              className="gap-2"
+            >
+              {removeMemberMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+              Remove
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Revoke invite modal */}
+      <Dialog open={!!revokeTarget} onOpenChange={(open) => { if (!open) setRevokeTarget(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-yellow-500" />
+              Revoke invite
+            </DialogTitle>
+            <DialogDescription>
+              Revoke the invite for <strong>{revokeTarget?.email}</strong>? They will no longer be able to use this invite link.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setRevokeTarget(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => revokeInviteMutation.mutate(revokeTarget?.id)}
+              disabled={revokeInviteMutation.isPending}
+              className="gap-2"
+            >
+              {revokeInviteMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+              Revoke
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }

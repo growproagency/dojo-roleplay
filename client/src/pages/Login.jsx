@@ -4,10 +4,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
+import { Loader2, School } from "lucide-react";
 
 export default function Login() {
   const [, setLocation] = useLocation();
@@ -15,8 +15,9 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [isSignUp, setIsSignUp] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState(null);
 
-  // If the user came from an invite link, send them back there after auth
+  // If the user came from an invite link, pre-fill email and default to sign up
   const pendingInviteToken = typeof window !== "undefined"
     ? sessionStorage.getItem("dojo:pendingInviteToken")
     : null;
@@ -24,14 +25,33 @@ export default function Login() {
     ? `/invite/${pendingInviteToken}`
     : "/dashboard";
 
+  useEffect(() => {
+    const storedEmail = sessionStorage.getItem("dojo:inviteEmail");
+    const storedMode = sessionStorage.getItem("dojo:inviteMode");
+    if (storedEmail) {
+      setEmail(storedEmail);
+      setInviteEmail(storedEmail);
+      setIsSignUp(storedMode !== "signin");
+      // Clean up so it doesn't persist across unrelated visits
+      sessionStorage.removeItem("dojo:inviteEmail");
+      sessionStorage.removeItem("dojo:inviteMode");
+    }
+  }, []);
+
   const handleEmailAuth = async (e) => {
     e.preventDefault();
     setLoading(true);
     try {
       if (isSignUp) {
-        const { error } = await supabase.auth.signUp({ email, password });
+        const { data, error } = await supabase.auth.signUp({ email, password });
         if (error) throw error;
-        toast.success("Check your email for a confirmation link!");
+        // With email confirmation disabled, the user is immediately signed in
+        if (data?.session) {
+          toast.success("Account created!");
+          setLocation(postLoginPath);
+        } else {
+          toast.success("Check your email for a confirmation link!");
+        }
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
@@ -52,15 +72,30 @@ export default function Login() {
     if (error) toast.error(error.message);
   };
 
+  const isFromInvite = !!inviteEmail || !!pendingInviteToken;
+
   return (
     <div className="flex items-center justify-center min-h-screen bg-background">
       <Card className="w-full max-w-md mx-4">
         <CardHeader className="text-center">
+          {isFromInvite && isSignUp && (
+            <div className="mx-auto w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
+              <School className="w-5 h-5 text-primary" />
+            </div>
+          )}
           <CardTitle className="text-2xl">
-            {isSignUp ? "Create Account" : "Sign In"}
+            {isSignUp
+              ? isFromInvite ? "Create your account" : "Create Account"
+              : "Sign In"}
           </CardTitle>
           <p className="text-sm text-muted-foreground mt-1">
-            {isSignUp ? "Sign up to start training" : "Sign in to your training dashboard"}
+            {isSignUp
+              ? isFromInvite
+                ? "Set up your account to join the team"
+                : "Sign up to start training"
+              : isFromInvite
+                ? "Sign in to accept your invite"
+                : "Sign in to your training dashboard"}
           </p>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -92,25 +127,36 @@ export default function Login() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="bg-background"
+                readOnly={!!inviteEmail}
+                className={`bg-background ${inviteEmail ? "opacity-70" : ""}`}
               />
+              {inviteEmail && (
+                <p className="text-xs text-muted-foreground">
+                  This email was set by your invite. Use this exact email to join.
+                </p>
+              )}
             </div>
             <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
+              <Label htmlFor="password">
+                {isSignUp ? "Create a password" : "Password"}
+              </Label>
               <Input
                 id="password"
                 type="password"
-                placeholder="Your password"
+                placeholder={isSignUp ? "At least 6 characters" : "Your password"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 minLength={6}
                 className="bg-background"
+                autoFocus={!!inviteEmail}
               />
             </div>
             <Button type="submit" className="w-full" disabled={loading}>
               {loading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-              {isSignUp ? "Sign Up" : "Sign In"}
+              {isSignUp
+                ? isFromInvite ? "Create account & continue" : "Sign Up"
+                : isFromInvite ? "Sign in & continue" : "Sign In"}
             </Button>
           </form>
 
