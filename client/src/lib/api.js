@@ -69,3 +69,14 @@ export const revokeSchoolInvite = (id) => apiFetch(`/school/invites/${id}`, { me
 // ---- Invite acceptance (public + authenticated) ----
 export const fetchInvitePreview = (token) => apiFetch(`/invites/${token}`);
 export const acceptInvite = (token) => apiFetch(`/invites/${token}/accept`, { method: "POST" });
+
+// ---- Super admin ----
+export const fetchAdminSchools = () => apiFetch("/admin/schools");
+export const fetchAdminSchool = (id) => apiFetch(`/admin/schools/${id}`);
+export const createAdminSchool = (data) => apiFetch("/admin/schools", { method: "POST", body: JSON.stringify(data) });
+export const updateAdminSchool = (id, data) => apiFetch(`/admin/schools/${id}`, { method: "PUT", body: JSON.stringify(data) });
+export const deleteAdminSchool = (id) => apiFetch(`/admin/schools/${id}`, { method: "DELETE" });
+export const fetchAdminUsers = () => apiFetch("/admin/users");
+export const changeAdminUserRole = (id, role) => apiFetch(`/admin/users/${id}/role`, { method: "PUT", body: JSON.stringify({ role }) });
+export const assignAdminUserSchool = (id, schoolId) => apiFetch(`/admin/users/${id}/school`, { method: "PUT", body: JSON.stringify({ schoolId }) });
+export const deleteAdminUser = (id) => apiFetch(`/admin/users/${id}`, { method: "DELETE" });
