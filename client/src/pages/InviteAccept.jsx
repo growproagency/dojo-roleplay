@@ -12,7 +12,7 @@ import {
   Clock,
   ShieldAlert,
 } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useLocation, useRoute } from "wouter";
 import { toast } from "sonner";
 
@@ -51,18 +51,33 @@ export default function InviteAccept() {
     },
   });
 
+  // After signup redirect, auth state takes a moment to settle.
+  // Show a spinner during that window instead of flashing the unauthenticated UI.
+  const [settling, setSettling] = useState(() => {
+    return typeof window !== "undefined" && !!sessionStorage.getItem(PENDING_INVITE_KEY);
+  });
+
+  useEffect(() => {
+    if (!settling) return;
+    // Give auth up to 2 seconds to settle after redirect
+    const timeout = setTimeout(() => setSettling(false), 2000);
+    // If user becomes available before the timeout, stop settling immediately
+    if (user) { setSettling(false); clearTimeout(timeout); }
+    return () => clearTimeout(timeout);
+  }, [settling, user]);
+
   // If user lands here unauthenticated, stash the token so we can pick it back up after login
   useEffect(() => {
-    if (token && !user && !authLoading) {
+    if (token && !user && !authLoading && !settling) {
       sessionStorage.setItem(PENDING_INVITE_KEY, token);
     }
-  }, [token, user, authLoading]);
+  }, [token, user, authLoading, settling]);
 
   if (!token) {
     return <CenteredCard><InvalidState message="Missing invite token." /></CenteredCard>;
   }
 
-  if (inviteLoading || authLoading) {
+  if (inviteLoading || authLoading || settling) {
     return (
       <CenteredCard>
         <div className="flex items-center justify-center py-8">
@@ -125,18 +140,38 @@ export default function InviteAccept() {
         </div>
 
         {!user ? (
-          <>
-            <p className="text-sm text-muted-foreground text-center">
-              Sign in or create an account with <strong>{invite.email}</strong> to accept this invite.
-            </p>
+          <div className="space-y-3">
+            <div className="p-3 rounded-lg bg-primary/5 border border-primary/20 text-sm text-center">
+              <p className="font-medium text-foreground">New here? No worries!</p>
+              <p className="text-muted-foreground mt-1">
+                Create an account with <strong>{invite.email}</strong> to join the team.
+              </p>
+            </div>
             <Button
-              onClick={() => setLocation("/login")}
+              onClick={() => {
+                sessionStorage.setItem("dojo:inviteEmail", invite.email);
+                sessionStorage.setItem("dojo:inviteMode", "signup");
+                setLocation("/login");
+              }}
               className="w-full"
               size="lg"
             >
-              Sign in to accept
+              Create account & join
             </Button>
-          </>
+            <p className="text-xs text-muted-foreground text-center">
+              Already have an account?{" "}
+              <button
+                onClick={() => {
+                  sessionStorage.setItem("dojo:inviteEmail", invite.email);
+                  sessionStorage.setItem("dojo:inviteMode", "signin");
+                  setLocation("/login");
+                }}
+                className="text-primary underline underline-offset-2 hover:text-primary/80"
+              >
+                Sign in instead
+              </button>
+            </p>
+          </div>
         ) : emailMismatch ? (
           <div className="flex items-start gap-3 p-3 rounded-lg bg-red-500/5 border border-red-500/20">
             <ShieldAlert className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
