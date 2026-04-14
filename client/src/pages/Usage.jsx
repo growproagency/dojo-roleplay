@@ -89,30 +89,30 @@ const PRESET_LABELS = {
 // ── component ─────────────────────────────────────────────────────────────────
 
 export default function Usage() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, isGlobalAdmin, loading: authLoading } = useAuth();
   const [, setLocation] = useLocation();
   const [preset, setPreset] = useState("all");
   const [showPresets, setShowPresets] = useState(false);
 
   useEffect(() => {
-    if (!authLoading && (!user || user.role !== "admin")) {
+    if (!authLoading && !isGlobalAdmin) {
       setLocation("/dashboard");
     }
-  }, [user, authLoading, setLocation]);
+  }, [isGlobalAdmin, authLoading, setLocation]);
 
   const dateRange = useMemo(() => getDateRange(preset), [preset]);
 
   const { data, isLoading } = useQuery({
     queryKey: ["usage", dateRange],
     queryFn: () => fetchUsage(dateRange),
-    enabled: !!user && user.role === "admin",
+    enabled: !!user && isGlobalAdmin,
   });
 
   const summary = data?.summary;
   const byUser = data?.byUser ?? [];
 
   if (authLoading) return null;
-  if (!user || user.role !== "admin") return null;
+  if (!user || !isGlobalAdmin) return null;
 
   return (
     <DashboardLayout>
