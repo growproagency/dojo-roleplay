@@ -602,6 +602,59 @@ export async function getUsageByUser(fromDate, toDate, schoolId) {
 
 // ---- Schools ----
 
+export async function getAllSchools() {
+  const sb = getSupabase();
+  if (!sb) return [];
+  const { data, error } = await sb
+    .from("schools")
+    .select("*")
+    .order("created_at", { ascending: true });
+  if (error) { console.error("[Database] getAllSchools error:", error); return []; }
+  return (data || []).map(toSchoolCamel);
+}
+
+export async function deleteSchool(id) {
+  const sb = getSupabase();
+  if (!sb) throw new Error("Supabase not available");
+  // Unassign all users from this school first
+  const { error: userErr } = await sb
+    .from("users")
+    .update({ school_id: null, role: "staff" })
+    .eq("school_id", id);
+  if (userErr) throw userErr;
+  // Delete invites
+  const { error: inviteErr } = await sb.from("school_invites").delete().eq("school_id", id);
+  if (inviteErr) console.error("[Database] deleteSchool invites cleanup:", inviteErr);
+  // Delete the school
+  const { error } = await sb.from("schools").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function getAllUsers() {
+  const sb = getSupabase();
+  if (!sb) return [];
+  const { data, error } = await sb
+    .from("users")
+    .select("*")
+    .order("created_at", { ascending: true });
+  if (error) { console.error("[Database] getAllUsers error:", error); return []; }
+  return (data || []).map(toUserCamel);
+}
+
+export async function updateUserRole(userId, role) {
+  const sb = getSupabase();
+  if (!sb) throw new Error("Supabase not available");
+  const { error } = await sb.from("users").update({ role }).eq("id", userId);
+  if (error) throw error;
+}
+
+export async function deleteUser(userId) {
+  const sb = getSupabase();
+  if (!sb) throw new Error("Supabase not available");
+  const { error } = await sb.from("users").delete().eq("id", userId);
+  if (error) throw error;
+}
+
 export async function getSchoolById(id) {
   const sb = getSupabase();
   if (!sb || !id) return undefined;

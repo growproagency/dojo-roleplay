@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/sidebar";
 import { getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { LayoutDashboard, LogOut, PanelLeft, Phone, Settings, Trophy, BarChart3, Sun, Moon, Users, User } from "lucide-react";
+import { LayoutDashboard, LogOut, PanelLeft, Phone, Settings, Trophy, BarChart3, Sun, Moon, Users, User, School } from "lucide-react";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -38,6 +38,7 @@ const menuItems = [
   { icon: Trophy, label: "Leaderboard", path: "/leaderboard" },
   { icon: Users, label: "Members", path: "/members", requires: "schoolAdmin" },
   { icon: Settings, label: "School Settings", path: "/settings", requires: "schoolAdmin" },
+  { icon: School, label: "All Schools", path: "/admin/schools", requires: "globalAdmin" },
   { icon: BarChart3, label: "Usage & Billing", path: "/usage", requires: "globalAdmin" },
 ];
 

@@ -15,6 +15,8 @@ import Usage from "./pages/Usage";
 import Members from "./pages/Members";
 import InviteAccept from "./pages/InviteAccept";
 import Profile from "./pages/Profile";
+import AdminSchools from "./pages/AdminSchools";
+import AdminSchoolDetail from "./pages/AdminSchoolDetail";
 
 function Router() {
   return (
@@ -29,6 +31,8 @@ function Router() {
       <Route path="/usage" component={Usage} />
       <Route path="/members" component={Members} />
       <Route path="/profile" component={Profile} />
+      <Route path="/admin/schools" component={AdminSchools} />
+      <Route path="/admin/schools/:id" component={AdminSchoolDetail} />
       <Route path="/invite/:token" component={InviteAccept} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
