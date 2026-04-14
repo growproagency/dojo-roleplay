@@ -11,6 +11,15 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -29,7 +38,9 @@ import {
   DollarSign,
   Tag,
   User,
+  AlertTriangle,
 } from "lucide-react";
+import { useState } from "react";
 import { useLocation, useRoute } from "wouter";
 import { toast } from "sonner";
 
@@ -60,6 +71,10 @@ export default function AdminSchoolDetail() {
   const queryClient = useQueryClient();
   const schoolId = params?.id ? parseInt(params.id, 10) : null;
 
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [unassignTarget, setUnassignTarget] = useState(null);
+
   const { data, isLoading } = useQuery({
     queryKey: ["admin", "school", schoolId],
     queryFn: () => fetchAdminSchool(schoolId),
@@ -80,6 +95,7 @@ export default function AdminSchoolDetail() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin", "school", schoolId] });
       queryClient.invalidateQueries({ queryKey: ["admin", "schools"] });
+      setUnassignTarget(null);
       toast.success("Member removed from school");
     },
     onError: (err) => toast.error(err.message || "Failed to remove member"),
@@ -90,6 +106,8 @@ export default function AdminSchoolDetail() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin", "school", schoolId] });
       queryClient.invalidateQueries({ queryKey: ["admin", "schools"] });
+      setDeleteTarget(null);
+      setDeleteConfirmText("");
       toast.success("User deleted");
     },
     onError: (err) => toast.error(err.message || "Failed to delete user"),
@@ -103,22 +121,21 @@ export default function AdminSchoolDetail() {
     changeRoleMutation.mutate({ userId: member.id, role: newRole });
   };
 
-  const handleUnassign = (member) => {
+  const openUnassignModal = (member) => {
     if (member.id === currentUser?.id) {
       toast.error("You cannot remove yourself");
       return;
     }
-    if (!confirm(`Remove ${member.name || member.email} from this school? They will keep their account but lose school access.`)) return;
-    unassignMutation.mutate(member.id);
+    setUnassignTarget(member);
   };
 
-  const handleDeleteUser = (member) => {
+  const openDeleteModal = (member) => {
     if (member.id === currentUser?.id) {
       toast.error("You cannot delete yourself");
       return;
     }
-    if (!confirm(`Permanently delete ${member.name || member.email}? This removes their account, NOT just school membership. This cannot be undone.`)) return;
-    deleteUserMutation.mutate(member.id);
+    setDeleteTarget(member);
+    setDeleteConfirmText("");
   };
 
   if (!isGlobalAdmin) {
@@ -306,8 +323,8 @@ export default function AdminSchoolDetail() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => handleUnassign(member)}
-                          disabled={isSelf || unassignMutation.isPending}
+                          onClick={() => openUnassignModal(member)}
+                          disabled={isSelf}
                           title="Remove from school"
                           className="text-muted-foreground hover:text-foreground"
                         >
@@ -316,8 +333,8 @@ export default function AdminSchoolDetail() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => handleDeleteUser(member)}
-                          disabled={isSelf || deleteUserMutation.isPending}
+                          onClick={() => openDeleteModal(member)}
+                          disabled={isSelf}
                           title="Delete user permanently"
                           className="text-destructive hover:text-destructive"
                         >
@@ -332,6 +349,76 @@ export default function AdminSchoolDetail() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Remove from school modal */}
+      <Dialog open={!!unassignTarget} onOpenChange={(open) => { if (!open) setUnassignTarget(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-yellow-500" />
+              Remove member
+            </DialogTitle>
+            <DialogDescription>
+              Remove <strong>{unassignTarget?.name || unassignTarget?.email}</strong> from {school?.name}? They will keep their account but lose access to this school.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setUnassignTarget(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => unassignMutation.mutate(unassignTarget?.id)}
+              disabled={unassignMutation.isPending}
+              className="gap-2"
+            >
+              {unassignMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+              Remove from school
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete user modal */}
+      <Dialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) { setDeleteTarget(null); setDeleteConfirmText(""); } }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-destructive">Delete user permanently</DialogTitle>
+            <DialogDescription>
+              This will permanently delete <strong>{deleteTarget?.name || deleteTarget?.email}</strong> and all their data. This is NOT the same as removing them from a school — their account will be gone forever.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <p className="text-sm text-muted-foreground">
+              Type <span className="font-mono font-semibold text-foreground">delete user</span> to confirm:
+            </p>
+            <Input
+              value={deleteConfirmText}
+              onChange={(e) => setDeleteConfirmText(e.target.value)}
+              placeholder="delete user"
+              autoFocus
+            />
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => { setDeleteTarget(null); setDeleteConfirmText(""); }}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => deleteUserMutation.mutate(deleteTarget?.id)}
+              disabled={deleteConfirmText !== "delete user" || deleteUserMutation.isPending}
+              className="gap-2"
+            >
+              {deleteUserMutation.isPending ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Trash2 className="w-4 h-4" />
+              )}
+              Delete user
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }

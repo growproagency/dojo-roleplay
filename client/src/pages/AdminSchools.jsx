@@ -12,6 +12,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Loader2,
   School,
   Plus,
@@ -39,6 +47,8 @@ export default function AdminSchools() {
   const queryClient = useQueryClient();
   const [showCreate, setShowCreate] = useState(false);
   const [newSchoolName, setNewSchoolName] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
 
   const { data: schools, isLoading } = useQuery({
     queryKey: ["admin", "schools"],
@@ -61,6 +71,8 @@ export default function AdminSchools() {
     mutationFn: deleteAdminSchool,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin", "schools"] });
+      setDeleteTarget(null);
+      setDeleteConfirmText("");
       toast.success("School deleted");
     },
     onError: (err) => toast.error(err.message || "Failed to delete school"),
@@ -72,9 +84,14 @@ export default function AdminSchools() {
     createMutation.mutate({ name: newSchoolName.trim() });
   };
 
-  const handleDelete = (school) => {
-    if (!confirm(`Delete "${school.name}"? All members will be unassigned. This cannot be undone.`)) return;
-    deleteMutation.mutate(school.id);
+  const openDeleteModal = (school) => {
+    setDeleteTarget(school);
+    setDeleteConfirmText("");
+  };
+
+  const handleConfirmDelete = () => {
+    if (!deleteTarget || deleteConfirmText !== "delete school") return;
+    deleteMutation.mutate(deleteTarget.id);
   };
 
   if (!isGlobalAdmin) {
@@ -200,8 +217,7 @@ export default function AdminSchools() {
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => handleDelete(school)}
-                      disabled={deleteMutation.isPending}
+                      onClick={() => openDeleteModal(school)}
                       className="text-destructive hover:text-destructive shrink-0"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -213,6 +229,47 @@ export default function AdminSchools() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Delete confirmation modal */}
+      <Dialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) { setDeleteTarget(null); setDeleteConfirmText(""); } }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-destructive">Delete school</DialogTitle>
+            <DialogDescription>
+              This will permanently delete <strong>{deleteTarget?.name}</strong> and unassign all its members. This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <p className="text-sm text-muted-foreground">
+              Type <span className="font-mono font-semibold text-foreground">delete school</span> to confirm:
+            </p>
+            <Input
+              value={deleteConfirmText}
+              onChange={(e) => setDeleteConfirmText(e.target.value)}
+              placeholder="delete school"
+              autoFocus
+            />
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => { setDeleteTarget(null); setDeleteConfirmText(""); }}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleConfirmDelete}
+              disabled={deleteConfirmText !== "delete school" || deleteMutation.isPending}
+              className="gap-2"
+            >
+              {deleteMutation.isPending ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Trash2 className="w-4 h-4" />
+              )}
+              Delete school
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }
