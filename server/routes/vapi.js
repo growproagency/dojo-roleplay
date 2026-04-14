@@ -248,7 +248,7 @@ function buildReceptionistAssistant(userName) {
     ? `Hi ${userName}! What scenario would you like to practice today? And would you like easy, medium, or hard difficulty?`
     : "Welcome to Dojo Roleplay! What scenario would you like to practice today? And would you like easy, medium, or hard difficulty?";
 
-  return {
+  const assistant = {
     model: {
       provider: "openai",
       model: "gpt-4o-mini",
@@ -257,7 +257,7 @@ function buildReceptionistAssistant(userName) {
           role: "system",
           content: `You are a friendly receptionist for Dojo Roleplay, a sales training system for martial arts schools.
 
-Your job is to find out which training scenario and difficulty the caller wants, then call the startTrainingCall function.
+Your job is to find out which training scenario and difficulty the caller wants, then call the handoff_tool function.
 
 Available scenarios:
 1. New Student Inquiry — adult calling about classes
@@ -269,7 +269,7 @@ Available scenarios:
 
 Available difficulties: Easy, Medium, Hard
 
-Be concise. Once you know both the scenario and difficulty, immediately call startTrainingCall. If they only say one, ask for the other. Default to "medium" if they don't specify difficulty.`,
+Be concise. Once you know both the scenario and difficulty, immediately call the handoff_tool tool. If they only say one, ask for the other. Default to "medium" if they don't specify difficulty.`,
         },
       ],
     },
@@ -278,12 +278,17 @@ Be concise. Once you know both the scenario and difficulty, immediately call sta
       voiceId: "Elliot",
     },
     firstMessage: greeting,
+    serverMessages: [
+      "end-of-call-report",
+      "status-update",
+      "handoff-destination-request",
+    ],
     tools: [
       {
-        type: "function",
+        type: "handoff",
         function: {
-          name: "startTrainingCall",
-          description: "Start the training roleplay once the caller has selected a scenario and difficulty",
+          name: "handoff_tool",
+          description: "Transfer to training scenario",
           parameters: {
             type: "object",
             properties: {
@@ -308,9 +313,27 @@ Be concise. Once you know both the scenario and difficulty, immediately call sta
             required: ["scenario", "difficulty"],
           },
         },
+        destinations: [
+          {
+            type: "dynamic",
+            server: {
+              url: ENV.vapiWebhookUrl || "",
+            },
+          },
+        ],
       },
     ],
   };
+
+  // Wire the webhook URL so Vapi can send events for this assistant
+  if (ENV.vapiWebhookUrl) {
+    assistant.server = {
+      url: ENV.vapiWebhookUrl,
+      timeoutSeconds: 20,
+    };
+  }
+
+  return assistant;
 }
 
 async function handleToolCalls(message, res) {

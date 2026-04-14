@@ -651,6 +651,13 @@ export async function updateUserRole(userId, role) {
 export async function deleteUser(userId) {
   const sb = getSupabase();
   if (!sb) throw new Error("Supabase not available");
+  // Unlink calls so we preserve call/scoring data
+  const { error: callErr } = await sb.from("calls").update({ user_id: null }).eq("user_id", userId);
+  if (callErr) console.error("[Database] deleteUser calls cleanup:", callErr);
+  // Remove school invites created by this user
+  const { error: inviteErr } = await sb.from("school_invites").delete().eq("invited_by", userId);
+  if (inviteErr) console.error("[Database] deleteUser invites cleanup:", inviteErr);
+  // Delete the user
   const { error } = await sb.from("users").delete().eq("id", userId);
   if (error) throw error;
 }
