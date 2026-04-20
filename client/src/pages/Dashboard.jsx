@@ -1,5 +1,5 @@
 import DashboardLayout from "@/components/DashboardLayout";
-import { fetchCalls, fetchVapiConfig, fetchScenarios, fetchVapiSessionToken } from "@/lib/api";
+import { fetchCalls, fetchVapiConfig, fetchScenarios, fetchVapiSessionToken, fetchVapiAssistantConfig } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -148,13 +148,23 @@ export default function Dashboard() {
         toast.error("Call error: " + (err?.message || "Something went wrong"));
       });
 
-      // Start the call using the assistant configured in Vapi dashboard.
-      // Pass the session token via assistantOverrides.metadata so the server
-      // can verify it on assistant-request / handoff events.
-      const startOptions = sessionToken
-        ? { metadata: { sessionToken } }
-        : undefined;
-      await vapi.start(vapiConfig.assistantId, startOptions);
+      // Fetch the dynamic Riley assistant config (includes custom scenarios)
+      let assistantConfig;
+      try {
+        assistantConfig = await fetchVapiAssistantConfig();
+      } catch (err) {
+        console.error("[Vapi Web] Failed to fetch assistant config:", err);
+        toast.error("Failed to load assistant configuration");
+        setWebCallConnecting(false);
+        return;
+      }
+
+      // Inject the session token into metadata for tenant identification
+      if (sessionToken) {
+        assistantConfig.metadata = { ...assistantConfig.metadata, sessionToken };
+      }
+
+      await vapi.start(assistantConfig);
     } catch (err) {
       console.error("[Vapi Web] Failed to start:", err);
       setWebCallConnecting(false);
