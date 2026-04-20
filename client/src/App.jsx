@@ -17,6 +17,7 @@ import InviteAccept from "./pages/InviteAccept";
 import Profile from "./pages/Profile";
 import AdminSchools from "./pages/AdminSchools";
 import AdminSchoolDetail from "./pages/AdminSchoolDetail";
+import CustomScenarios from "./pages/CustomScenarios";
 
 function Router() {
   return (
@@ -33,6 +34,7 @@ function Router() {
       <Route path="/profile" component={Profile} />
       <Route path="/admin/schools" component={AdminSchools} />
       <Route path="/admin/schools/:id" component={AdminSchoolDetail} />
+      <Route path="/admin/scenarios" component={CustomScenarios} />
       <Route path="/invite/:token" component={InviteAccept} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />

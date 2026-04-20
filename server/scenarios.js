@@ -307,8 +307,54 @@ export const SCENARIOS = {
   },
 };
 
-export function getScenarioSystemPrompt(scenarioId, school, difficulty = "medium") {
-  const base = SCENARIOS[scenarioId]?.systemPrompt ?? SCENARIOS.new_student.systemPrompt;
+// Built-in scenario IDs (used to prevent slug collisions with custom scenarios)
+export const BUILT_IN_SCENARIO_IDS = Object.keys(SCENARIOS);
+
+/**
+ * Resolve a scenario by ID/slug.
+ * Checks built-in scenarios first, then custom scenarios from the DB.
+ * Returns a unified object: { id, title, description, systemPrompt, voiceId, voiceProvider, firstMessage, scoringPrompt, isBuiltIn }
+ */
+export async function resolveScenario(scenarioId, { getCustomScenarioBySlug } = {}) {
+  // 1. Built-in scenario
+  if (SCENARIOS[scenarioId]) {
+    const s = SCENARIOS[scenarioId];
+    return {
+      id: s.id,
+      title: s.title,
+      description: s.description,
+      systemPrompt: s.systemPrompt,
+      voiceId: null,       // use the hardcoded voice map in vapi.js
+      voiceProvider: null,
+      firstMessage: null,  // use the hardcoded firstMessages map in vapi.js
+      scoringPrompt: null,
+      isBuiltIn: true,
+    };
+  }
+
+  // 2. Custom scenario from DB
+  if (getCustomScenarioBySlug) {
+    const custom = await getCustomScenarioBySlug(scenarioId);
+    if (custom && custom.isActive) {
+      return {
+        id: custom.slug,
+        title: custom.title,
+        description: custom.description,
+        systemPrompt: buildSharedBehavior(custom.contextType) + "\n\n" + custom.characterPrompt,
+        voiceId: custom.voiceId,
+        voiceProvider: custom.voiceProvider,
+        firstMessage: custom.openingLine || "Hello?",
+        scoringPrompt: custom.scoringPrompt || null,
+        isBuiltIn: false,
+      };
+    }
+  }
+
+  return null;
+}
+
+export function getScenarioSystemPrompt(scenarioId, school, difficulty = "medium", basePromptOverride = null) {
+  const base = basePromptOverride || SCENARIOS[scenarioId]?.systemPrompt || SCENARIOS.new_student.systemPrompt;
   const difficultyBlock = DIFFICULTY_MODIFIERS[difficulty];
   if (!school) return base + difficultyBlock;
 

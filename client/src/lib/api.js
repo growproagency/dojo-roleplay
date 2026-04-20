@@ -71,6 +71,14 @@ export const fetchInvitePreview = (token) => apiFetch(`/invites/${token}`);
 export const acceptInvite = (token) => apiFetch(`/invites/${token}/accept`, { method: "POST" });
 
 // ---- Super admin ----
+// ---- Custom scenarios (global admin) ----
+export const fetchCustomScenarios = () => apiFetch("/scenarios/custom");
+export const fetchCustomScenario = (id) => apiFetch(`/scenarios/custom/${id}`);
+export const createCustomScenario = (data) => apiFetch("/scenarios/custom", { method: "POST", body: JSON.stringify(data) });
+export const updateCustomScenario = (id, data) => apiFetch(`/scenarios/custom/${id}`, { method: "PUT", body: JSON.stringify(data) });
+export const deleteCustomScenario = (id) => apiFetch(`/scenarios/custom/${id}`, { method: "DELETE" });
+
+// ---- Super admin ----
 export const fetchAdminSchools = () => apiFetch("/admin/schools");
 export const fetchAdminSchool = (id) => apiFetch(`/admin/schools/${id}`);
 export const createAdminSchool = (data) => apiFetch("/admin/schools", { method: "POST", body: JSON.stringify(data) });

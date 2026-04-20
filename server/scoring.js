@@ -224,14 +224,22 @@ Be specific, reference actual moments from the transcript, and be constructive b
 
 export async function scoreCallTranscript(
   transcript,
-  scenarioTitle
+  scenarioTitle,
+  customScoringPrompt = null
 ) {
-  const isOutbound = scenarioTitle.toLowerCase().includes("outbound") || scenarioTitle.toLowerCase().includes("callback");
-  const isRenewal = scenarioTitle.toLowerCase().includes("renewal");
-  const isCancellation = scenarioTitle.toLowerCase().includes("cancellation");
-  const isSalesEnrollment = !isRenewal && !isCancellation && (scenarioTitle.toLowerCase().includes("enrollment") || scenarioTitle.toLowerCase().includes("conference"));
+  let systemPrompt;
 
-  const systemPrompt = isCancellation ? CANCELLATION_SAVE_SCORING_PROMPT : isRenewal ? RENEWAL_CONFERENCE_SCORING_PROMPT : isSalesEnrollment ? SALES_ENROLLMENT_SCORING_PROMPT : isOutbound ? OUTBOUND_SCORING_PROMPT : `You are an expert sales coach for martial arts schools. Your job is to evaluate phone call transcripts where a school admissions staff member is practicing an inbound inquiry call with a simulated prospect.
+  if (customScoringPrompt) {
+    // Use the custom scoring rubric provided by the scenario creator
+    systemPrompt = customScoringPrompt;
+  } else {
+    // Built-in scoring prompt selection based on scenario title
+    const isOutbound = scenarioTitle.toLowerCase().includes("outbound") || scenarioTitle.toLowerCase().includes("callback");
+    const isRenewal = scenarioTitle.toLowerCase().includes("renewal");
+    const isCancellation = scenarioTitle.toLowerCase().includes("cancellation");
+    const isSalesEnrollment = !isRenewal && !isCancellation && (scenarioTitle.toLowerCase().includes("enrollment") || scenarioTitle.toLowerCase().includes("conference"));
+
+    systemPrompt = isCancellation ? CANCELLATION_SAVE_SCORING_PROMPT : isRenewal ? RENEWAL_CONFERENCE_SCORING_PROMPT : isSalesEnrollment ? SALES_ENROLLMENT_SCORING_PROMPT : isOutbound ? OUTBOUND_SCORING_PROMPT : `You are an expert sales coach for martial arts schools. Your job is to evaluate phone call transcripts where a school admissions staff member is practicing an inbound inquiry call with a simulated prospect.
 
 The staff member is trained on a specific 13-step inbound call script. Evaluate how well they followed each step.
 
@@ -290,6 +298,7 @@ Return a JSON object with this exact structure:
 }
 
 Be specific, reference actual moments from the transcript, and be constructive but honest. If a step was completely skipped, call it out clearly.`;
+  } // end of built-in scoring prompt selection
 
   const userMessage = `Scenario: ${scenarioTitle}
 

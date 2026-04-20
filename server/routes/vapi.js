@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { getScenarioSystemPrompt, SCENARIOS } from "../scenarios.js";
+import { getScenarioSystemPrompt, SCENARIOS, resolveScenario } from "../scenarios.js";
 import { scoreCallTranscript } from "../scoring.js";
 import {
   createCall,
@@ -10,6 +10,8 @@ import {
   getUserByPhoneNumber,
   countRecentPhoneAttempts,
   logPhoneCallAttempt,
+  getActiveCustomScenarios,
+  getCustomScenarioBySlug,
 } from "../db.js";
 import { verifySessionToken } from "../lib/sessionToken.js";
 import { ENV } from "../config/env.js";
@@ -235,15 +237,34 @@ async function handleAssistantRequest(message, res) {
     }).catch(() => {});
     setCallContext(vapiCallId, { userId: user.id, schoolId: user.schoolId });
 
-    return res.json({ assistant: buildReceptionistAssistant(user.name) });
+    return res.json({ assistant: await buildReceptionistAssistant(user.name) });
   }
 
   // Web call (or unknown type) — return generic receptionist.
   // Tenant identification will happen at handoff time via session token in metadata.
-  return res.json({ assistant: buildReceptionistAssistant(null) });
+  return res.json({ assistant: await buildReceptionistAssistant(null) });
 }
 
-function buildReceptionistAssistant(userName) {
+async function buildReceptionistAssistant(userName) {
+  // Fetch custom scenarios and merge with built-in
+  const customScenarios = await getActiveCustomScenarios().catch(() => []);
+
+  const allScenarios = [
+    { id: "new_student", title: "New Student Inquiry", description: "adult calling about classes" },
+    { id: "parent_enrollment", title: "Parent Enrollment", description: "parent enrolling a child" },
+    { id: "web_lead_callback", title: "Outbound Web Lead Callback", description: "calling back a web form lead" },
+    { id: "sales_enrollment", title: "Sales Enrollment Conference", description: "post-trial enrollment discussion" },
+    { id: "renewal_conference", title: "Renewal Conference", description: "renewing an existing student" },
+    { id: "cancellation_save", title: "Cancellation Save", description: "parent calling to cancel" },
+    ...customScenarios.map(s => ({ id: s.slug, title: s.title, description: s.description })),
+  ];
+
+  const scenarioList = allScenarios
+    .map((s, i) => `${i + 1}. ${s.title} — ${s.description}`)
+    .join("\n");
+
+  const scenarioIds = allScenarios.map(s => s.id);
+
   const greeting = userName
     ? `Hi ${userName}! What scenario would you like to practice today? And would you like easy, medium, or hard difficulty?`
     : "Welcome to Dojo Roleplay! What scenario would you like to practice today? And would you like easy, medium, or hard difficulty?";
@@ -260,12 +281,7 @@ function buildReceptionistAssistant(userName) {
 Your job is to find out which training scenario and difficulty the caller wants, then call the handoff_tool function.
 
 Available scenarios:
-1. New Student Inquiry — adult calling about classes
-2. Parent Enrollment — parent enrolling a child
-3. Outbound Web Lead Callback — calling back a web form lead
-4. Sales Enrollment Conference — post-trial enrollment discussion
-5. Renewal Conference — renewing an existing student
-6. Cancellation Save — parent calling to cancel
+${scenarioList}
 
 Available difficulties: Easy, Medium, Hard
 
@@ -294,14 +310,7 @@ Be concise. Once you know both the scenario and difficulty, immediately call the
             properties: {
               scenario: {
                 type: "string",
-                enum: [
-                  "new_student",
-                  "parent_enrollment",
-                  "web_lead_callback",
-                  "sales_enrollment",
-                  "renewal_conference",
-                  "cancellation_save",
-                ],
+                enum: scenarioIds,
                 description: "The training scenario to practice",
               },
               difficulty: {
@@ -404,11 +413,14 @@ async function handleHandoffRequest(message, res) {
   const vapiCallId = call?.id;
   const handoffData = message.parameters || message.toolCall?.function?.arguments || {};
 
-  const scenario = handoffData.scenario || "new_student";
+  const scenarioSlug = handoffData.scenario || "new_student";
   const difficulty = handoffData.difficulty || "medium";
 
-  if (!SCENARIOS[scenario]) {
-    console.warn("[Vapi] handoff-destination-request: invalid scenario", scenario);
+  // Resolve scenario (built-in or custom)
+  const resolved = await resolveScenario(scenarioSlug, { getCustomScenarioBySlug });
+
+  if (!resolved) {
+    console.warn("[Vapi] handoff-destination-request: invalid scenario", scenarioSlug);
     return res.json({ error: "Invalid scenario" });
   }
 
@@ -429,22 +441,22 @@ async function handleHandoffRequest(message, res) {
     callDbId = await createCall({
       userId: tenant.userId ?? null,
       schoolId: tenant.schoolId,
-      scenario,
+      scenario: scenarioSlug,
       difficulty,
       vapiCallId: vapiCallId || null,
       status: "in_progress",
     });
   }
 
-  // Fetch school settings
+  // Fetch school settings and build the system prompt
   const settings = await getSchoolSettings(tenant.schoolId).catch(() => null);
-  const systemPrompt = getScenarioSystemPrompt(scenario, settings, difficulty);
-  const scenarioTitle = SCENARIOS[scenario].title;
+  const systemPrompt = getScenarioSystemPrompt(scenarioSlug, settings, difficulty, resolved.isBuiltIn ? null : resolved.systemPrompt);
+  const scenarioTitle = resolved.title;
 
-  console.log(`[Vapi] Handoff: scenario=${scenario}, difficulty=${difficulty}, callDbId=${callDbId}, schoolId=${tenant.schoolId}, schoolName=${settings?.schoolName ?? "NO SETTINGS"}`);
+  console.log(`[Vapi] Handoff: scenario=${scenarioSlug}, difficulty=${difficulty}, callDbId=${callDbId}, schoolId=${tenant.schoolId}, schoolName=${settings?.schoolName ?? "NO SETTINGS"}`);
 
-  // First messages for each scenario (what the AI character says first)
-  const firstMessages = {
+  // Built-in scenario voice/firstMessage maps (custom scenarios carry their own)
+  const builtInFirstMessages = {
     new_student: "Hey, I was just calling to get some info about your adult classes?",
     parent_enrollment: "Hi, yeah — I'm calling about your kids' program? I'm thinking about enrolling my son.",
     web_lead_callback: null,
@@ -453,14 +465,23 @@ async function handleHandoffRequest(message, res) {
     cancellation_save: "Hi, I'm calling because I need to cancel Cameron's membership.",
   };
 
-  const scenarioVoices = {
-    new_student:         { provider: "vapi", voiceId: "Elliot" },    
-    parent_enrollment:   { provider: "vapi", voiceId: "Emma" },    
-    web_lead_callback:   { provider: "vapi", voiceId: "Rohan" },   
-    sales_enrollment:    { provider: "vapi", voiceId: "Nico" },     
-    renewal_conference:  { provider: "vapi", voiceId: "Savannah" },  
-    cancellation_save:   { provider: "vapi", voiceId: "Clara" },     
+  const builtInVoices = {
+    new_student:         { provider: "vapi", voiceId: "Elliot" },
+    parent_enrollment:   { provider: "vapi", voiceId: "Emma" },
+    web_lead_callback:   { provider: "vapi", voiceId: "Rohan" },
+    sales_enrollment:    { provider: "vapi", voiceId: "Nico" },
+    renewal_conference:  { provider: "vapi", voiceId: "Savannah" },
+    cancellation_save:   { provider: "vapi", voiceId: "Clara" },
   };
+
+  // Use resolved values for custom scenarios, built-in maps for built-in
+  const voice = resolved.isBuiltIn
+    ? (builtInVoices[scenarioSlug] || { provider: "vapi", voiceId: "Elliot" })
+    : { provider: resolved.voiceProvider || "vapi", voiceId: resolved.voiceId || "Elliot" };
+
+  const firstMessage = resolved.isBuiltIn
+    ? (builtInFirstMessages[scenarioSlug] ?? "Hello?")
+    : (resolved.firstMessage || "Hello?");
 
   const destinationAssistant = {
     model: {
@@ -468,8 +489,8 @@ async function handleHandoffRequest(message, res) {
       model: "gpt-4o-mini",
       messages: [{ role: "system", content: systemPrompt }],
     },
-    voice: scenarioVoices[scenario] || { provider: "vapi", voiceId: "Elliot" },
-    firstMessage: firstMessages[scenario] ?? "Hello?",
+    voice,
+    firstMessage,
     silenceTimeoutSeconds: 30,
     maxDurationSeconds: 600,
     serverMessages: [
@@ -592,8 +613,10 @@ async function triggerScoring(callDbId, transcript, scenario) {
   try {
     await updateCall(callDbId, { status: "scoring" });
 
-    const scenarioTitle = SCENARIOS[scenario]?.title || "Training Call";
-    const result = await scoreCallTranscript(transcript, scenarioTitle);
+    // Resolve scenario to get title and optional custom scoring prompt
+    const resolved = await resolveScenario(scenario, { getCustomScenarioBySlug }).catch(() => null);
+    const scenarioTitle = resolved?.title || SCENARIOS[scenario]?.title || "Training Call";
+    const result = await scoreCallTranscript(transcript, scenarioTitle, resolved?.scoringPrompt);
 
     await createScorecard({
       callId: callDbId,
