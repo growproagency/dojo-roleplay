@@ -131,6 +131,7 @@ router.put("/custom/:id", requireGlobalAdmin, async (req, res) => {
     }
 
     const scenario = await updateCustomScenario(id, parsed.data);
+
     res.json(scenario);
   } catch (err) {
     console.error("[Scenarios] update error:", err);
@@ -148,6 +149,7 @@ router.delete("/custom/:id", requireGlobalAdmin, async (req, res) => {
     if (!existing) return res.status(404).json({ message: "Scenario not found" });
 
     await deleteCustomScenario(id);
+
     res.json({ success: true });
   } catch (err) {
     console.error("[Scenarios] delete error:", err);

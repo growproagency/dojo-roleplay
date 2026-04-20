@@ -148,33 +148,10 @@ export default function Dashboard() {
         toast.error("Call error: " + (err?.message || "Something went wrong"));
       });
 
-      // Build assistant overrides with dynamic scenario list from already-fetched scenarios
-      const scenarioList = (scenarios || [])
-        .map((s, i) => `${i + 1}. ${s.title} — ${s.description}`)
-        .join("\n");
-
-      const assistantOverrides = {
-        model: {
-          provider: "openai",
-          model: "gpt-4o",
-          messages: [
-            {
-              role: "system",
-              content: `You are a friendly receptionist for Dojo Roleplay, a sales training system for martial arts schools.
-
-Your job is to find out which training scenario and difficulty the caller wants, then call the handoff_tool function.
-
-Available scenarios:
-${scenarioList}
-
-Available difficulties: Easy, Medium, Hard
-
-Be concise. Once you know both the scenario and difficulty, immediately call the handoff_tool tool. If they only say one, ask for the other. Default to "medium" if they don't specify difficulty.`,
-            },
-          ],
-        },
-        metadata: sessionToken ? { sessionToken } : undefined,
-      };
+      // Build the start options with session token
+      const assistantOverrides = sessionToken
+        ? { metadata: { sessionToken } }
+        : undefined;
 
       await vapi.start(vapiConfig.assistantId, assistantOverrides);
     } catch (err) {

@@ -355,6 +355,28 @@ async function handleToolCalls(message, res) {
   const tenant = await resolveTenantContext(message);
 
   for (const toolCall of toolCalls) {
+    if (toolCall.function?.name === "get_scenarios") {
+      // Return the dynamic list of available scenarios
+      const customScenarios = await getActiveCustomScenarios().catch(() => []);
+      const allScenarios = [
+        { slug: "new_student", title: "New Student Inquiry", description: "adult calling about classes" },
+        { slug: "parent_enrollment", title: "Parent Enrollment", description: "parent enrolling a child" },
+        { slug: "web_lead_callback", title: "Outbound Web Lead Callback", description: "calling back a web form lead" },
+        { slug: "sales_enrollment", title: "Sales Enrollment Conference", description: "post-trial enrollment discussion" },
+        { slug: "renewal_conference", title: "Renewal Conference", description: "renewing an existing student" },
+        { slug: "cancellation_save", title: "Cancellation Save", description: "parent calling to cancel" },
+        ...customScenarios.map(s => ({ slug: s.slug, title: s.title, description: s.description })),
+      ];
+      const list = allScenarios
+        .map((s, i) => `${i + 1}. ${s.title} (slug: "${s.slug}") — ${s.description}`)
+        .join("\n");
+      results.push({
+        toolCallId: toolCall.id,
+        result: `Here are the available scenarios. Use the slug value when calling handoff_tool:\n\n${list}`,
+      });
+      continue;
+    }
+
     if (toolCall.function?.name === "startTrainingCall") {
       const args = toolCall.function.arguments || {};
       const scenario = args.scenario;
