@@ -23,6 +23,7 @@ function toUserCamel(row) {
     avatarUrl: row.avatar_url,
     schoolId: row.school_id ?? null,
     phoneNumber: row.phone_number ?? null,
+    supabaseAuthId: row.supabase_auth_id ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     lastSignedIn: row.last_signed_in,
@@ -147,6 +148,7 @@ export async function upsertUser(user) {
   if (user.avatarUrl !== undefined) row.avatar_url = user.avatarUrl;
   if (user.schoolId !== undefined) row.school_id = user.schoolId;
   if (user.phoneNumber !== undefined) row.phone_number = user.phoneNumber;
+  if (user.supabaseAuthId !== undefined) row.supabase_auth_id = user.supabaseAuthId;
   row.last_signed_in = user.lastSignedIn ?? new Date().toISOString();
 
   const { error } = await sb
@@ -651,6 +653,10 @@ export async function updateUserRole(userId, role) {
 export async function deleteUser(userId) {
   const sb = getSupabase();
   if (!sb) throw new Error("Supabase not available");
+
+  // Get user email before deleting — needed to find the Supabase Auth account
+  const user = await getUserById(userId);
+
   // Unlink calls — preserves call/scoring data with user_id = null
   const { error: callErr } = await sb.from("calls").update({ user_id: null }).eq("user_id", userId);
   if (callErr) console.error("[Database] deleteUser calls cleanup:", callErr);
@@ -660,9 +666,29 @@ export async function deleteUser(userId) {
   // Remove school invites created by this user
   const { error: inviteErr } = await sb.from("school_invites").delete().eq("invited_by", userId);
   if (inviteErr) console.error("[Database] deleteUser invites cleanup:", inviteErr);
-  // Delete the user
+  // Delete from public.users
   const { error } = await sb.from("users").delete().eq("id", userId);
   if (error) throw error;
+
+  // Delete from Supabase Auth so they can re-register later
+  if (user?.supabaseAuthId) {
+    const { error: authErr } = await sb.auth.admin.deleteUser(user.supabaseAuthId);
+    if (authErr) console.error("[Database] deleteUser auth cleanup:", authErr);
+  } else if (user?.email) {
+    // Fallback for users who haven't logged in since the auth ID migration
+    try {
+      const { data: { users: authUsers } } = await sb.auth.admin.listUsers({ page: 1, perPage: 1000 });
+      const authUser = (authUsers || []).find(
+        (u) => u.email?.toLowerCase() === user.email.toLowerCase()
+      );
+      if (authUser) {
+        const { error: authErr } = await sb.auth.admin.deleteUser(authUser.id);
+        if (authErr) console.error("[Database] deleteUser auth cleanup:", authErr);
+      }
+    } catch (authErr) {
+      console.error("[Database] deleteUser auth cleanup failed:", authErr);
+    }
+  }
 }
 
 export async function getSchoolById(id) {

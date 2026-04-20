@@ -36,13 +36,15 @@ export async function softAuth(req, _res, next) {
         email: supabaseUser.email,
         name: supabaseUser.user_metadata?.full_name || supabaseUser.user_metadata?.name || null,
         avatarUrl: supabaseUser.user_metadata?.avatar_url || null,
+        supabaseAuthId: supabaseUser.id,
         lastSignedIn: new Date(),
       });
       user = await getUserByEmail(supabaseUser.email);
     } else {
-      // Update last signed in
+      // Update last signed in + backfill auth ID if missing
       await upsertUser({
         email: supabaseUser.email,
+        supabaseAuthId: supabaseUser.id,
         lastSignedIn: new Date(),
       });
     }
