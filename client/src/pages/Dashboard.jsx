@@ -159,7 +159,7 @@ export default function Dashboard() {
         return;
       }
 
-      // Inject the session token into metadata for tenant identification
+      // Inject the session token into metadata
       if (sessionToken) {
         assistantConfig.metadata = { ...assistantConfig.metadata, sessionToken };
       }

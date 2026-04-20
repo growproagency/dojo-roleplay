@@ -71,11 +71,6 @@ Be concise. Once you know both the scenario and difficulty, immediately call the
         voiceId: "Elliot",
       },
       firstMessage: "Welcome to Dojo Roleplay! What scenario would you like to practice today? And would you like easy, medium, or hard difficulty?",
-      serverMessages: [
-        "end-of-call-report",
-        "status-update",
-        "handoff-destination-request",
-      ],
       tools: [
         {
           type: "handoff",
@@ -110,13 +105,6 @@ Be concise. Once you know both the scenario and difficulty, immediately call the
         },
       ],
     };
-
-    if (ENV.vapiWebhookUrl) {
-      assistant.server = {
-        url: ENV.vapiWebhookUrl,
-        timeoutSeconds: 20,
-      };
-    }
 
     res.json(assistant);
   } catch (err) {
