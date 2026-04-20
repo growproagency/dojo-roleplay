@@ -2,7 +2,6 @@ import { Router } from "express";
 import { requireUser } from "../middleware/auth.js";
 import { createSessionToken } from "../lib/sessionToken.js";
 import { ENV } from "../config/env.js";
-import { SCENARIOS } from "../scenarios.js";
 import { getActiveCustomScenarios } from "../db.js";
 
 const router = Router();
@@ -13,43 +12,39 @@ router.get("/", requireUser, (_req, res) => {
   const phoneNumber = process.env.VAPI_PHONE_NUMBER;
   const apiKey = process.env.VAPI_API_KEY;
   const publicKey = process.env.VAPI_PUBLIC_KEY;
-  const serverUrl = ENV.vapiWebhookUrl || null;
+  const assistantId = process.env.VAPI_ASSISTANT_ID;
 
   res.json({
     phoneNumber: phoneNumber || null,
     publicKey: publicKey || null,
-    serverUrl: serverUrl,
+    assistantId: assistantId || null,
     configured: !!(apiKey && phoneNumberId),
-    webCallEnabled: !!(publicKey && serverUrl),
+    webCallEnabled: !!(publicKey && assistantId),
   });
 });
 
-// GET /api/vapi-config/assistant — get the dynamic Riley assistant config
-// Returns the full assistant object for vapi.start() with custom scenarios included.
-router.get("/assistant", requireUser, async (_req, res) => {
+// GET /api/vapi-config/overrides — get assistantOverrides with dynamic scenario list
+// Used by the frontend to override Riley's system prompt at call start time.
+router.get("/overrides", requireUser, async (_req, res) => {
   try {
     const customScenarios = await getActiveCustomScenarios().catch(() => []);
 
     const allScenarios = [
-      { id: "new_student", title: "New Student Inquiry", description: "adult calling about classes" },
-      { id: "parent_enrollment", title: "Parent Enrollment", description: "parent enrolling a child" },
-      { id: "web_lead_callback", title: "Outbound Web Lead Callback", description: "calling back a web form lead" },
-      { id: "sales_enrollment", title: "Sales Enrollment Conference", description: "post-trial enrollment discussion" },
-      { id: "renewal_conference", title: "Renewal Conference", description: "renewing an existing student" },
-      { id: "cancellation_save", title: "Cancellation Save", description: "parent calling to cancel" },
-      ...customScenarios.map(s => ({ id: s.slug, title: s.title, description: s.description })),
+      { id: "new_student", title: "New Student Inquiry", desc: "adult calling about classes" },
+      { id: "parent_enrollment", title: "Parent Enrollment", desc: "parent enrolling a child" },
+      { id: "web_lead_callback", title: "Outbound Web Lead Callback", desc: "calling back a web form lead" },
+      { id: "sales_enrollment", title: "Sales Enrollment Conference", desc: "post-trial enrollment discussion" },
+      { id: "renewal_conference", title: "Renewal Conference", desc: "renewing an existing student" },
+      { id: "cancellation_save", title: "Cancellation Save", desc: "parent calling to cancel" },
+      ...customScenarios.map(s => ({ id: s.slug, title: s.title, desc: s.description })),
     ];
 
     const scenarioList = allScenarios
-      .map((s, i) => `${i + 1}. ${s.title} — ${s.description}`)
+      .map((s, i) => `${i + 1}. ${s.title} — ${s.desc}`)
       .join("\n");
 
-    const scenarioIds = allScenarios.map(s => s.id);
-
-    const assistant = {
+    res.json({
       model: {
-        provider: "openai",
-        model: "gpt-4o-mini",
         messages: [
           {
             role: "system",
@@ -66,62 +61,10 @@ Be concise. Once you know both the scenario and difficulty, immediately call the
           },
         ],
       },
-      voice: {
-        provider: "vapi",
-        voiceId: "Elliot",
-      },
-      firstMessage: "Welcome to Dojo Roleplay! What scenario would you like to practice today? And would you like easy, medium, or hard difficulty?",
-      serverMessages: [
-        "end-of-call-report",
-        "status-update",
-        "handoff-destination-request",
-      ],
-      tools: [
-        {
-          type: "handoff",
-          function: {
-            name: "handoff_tool",
-            description: "Transfer to training scenario",
-            parameters: {
-              type: "object",
-              properties: {
-                scenario: {
-                  type: "string",
-                  enum: scenarioIds,
-                  description: "The training scenario to practice",
-                },
-                difficulty: {
-                  type: "string",
-                  enum: ["easy", "medium", "hard"],
-                  description: "The difficulty level",
-                },
-              },
-              required: ["scenario", "difficulty"],
-            },
-          },
-          destinations: [
-            {
-              type: "dynamic",
-              server: {
-                url: ENV.vapiWebhookUrl || "",
-              },
-            },
-          ],
-        },
-      ],
-    };
-
-    if (ENV.vapiWebhookUrl) {
-      assistant.server = {
-        url: ENV.vapiWebhookUrl,
-        timeoutSeconds: 20,
-      };
-    }
-
-    res.json(assistant);
+    });
   } catch (err) {
-    console.error("[VapiConfig] assistant config error:", err);
-    res.status(500).json({ message: "Failed to build assistant config" });
+    console.error("[VapiConfig] overrides error:", err);
+    res.status(500).json({ message: "Failed to build overrides" });
   }
 });
 
