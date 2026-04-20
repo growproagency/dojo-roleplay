@@ -53,7 +53,7 @@ export const fetchUsage = (params) => {
   return apiFetch(`/admin/usage${query ? `?${query}` : ""}`);
 };
 export const fetchVapiConfig = () => apiFetch("/vapi-config");
-export const fetchVapiAssistantConfig = () => apiFetch("/vapi-config/assistant");
+export const fetchVapiAssistantOverrides = () => apiFetch("/vapi-config/overrides");
 export const fetchVapiSessionToken = () => apiFetch("/vapi-config/session-token", { method: "POST" });
 
 // ---- School & members ----

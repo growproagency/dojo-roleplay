@@ -1,5 +1,5 @@
 import DashboardLayout from "@/components/DashboardLayout";
-import { fetchCalls, fetchVapiConfig, fetchScenarios, fetchVapiSessionToken, fetchVapiAssistantConfig } from "@/lib/api";
+import { fetchCalls, fetchVapiConfig, fetchScenarios, fetchVapiSessionToken, fetchVapiAssistantOverrides } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -148,23 +148,21 @@ export default function Dashboard() {
         toast.error("Call error: " + (err?.message || "Something went wrong"));
       });
 
-      // Fetch the dynamic Riley assistant config (includes custom scenarios)
-      let assistantConfig;
+      // Fetch assistant overrides (dynamic scenario list + session token)
+      let assistantOverrides;
       try {
-        assistantConfig = await fetchVapiAssistantConfig();
+        assistantOverrides = await fetchVapiAssistantOverrides();
       } catch (err) {
-        console.error("[Vapi Web] Failed to fetch assistant config:", err);
-        toast.error("Failed to load assistant configuration");
-        setWebCallConnecting(false);
-        return;
+        console.warn("[Vapi Web] Failed to fetch overrides, using defaults:", err);
+        assistantOverrides = {};
       }
 
-      // Inject the session token into metadata
+      // Inject session token into metadata
       if (sessionToken) {
-        assistantConfig.metadata = { ...assistantConfig.metadata, sessionToken };
+        assistantOverrides.metadata = { ...assistantOverrides.metadata, sessionToken };
       }
 
-      await vapi.start(assistantConfig);
+      await vapi.start(vapiConfig.assistantId, assistantOverrides);
     } catch (err) {
       console.error("[Vapi Web] Failed to start:", err);
       setWebCallConnecting(false);
