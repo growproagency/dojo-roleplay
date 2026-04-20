@@ -88,6 +88,27 @@ function toInviteCamel(row) {
   };
 }
 
+function toCustomScenarioCamel(row) {
+  if (!row) return undefined;
+  return {
+    id: row.id,
+    slug: row.slug,
+    title: row.title,
+    description: row.description,
+    contextType: row.context_type,
+    characterName: row.character_name,
+    characterPrompt: row.character_prompt,
+    openingLine: row.opening_line,
+    voiceId: row.voice_id,
+    voiceProvider: row.voice_provider,
+    scoringPrompt: row.scoring_prompt,
+    isActive: row.is_active,
+    createdBy: row.created_by,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
 function toPhoneAttemptCamel(row) {
   if (!row) return undefined;
   return {
@@ -846,4 +867,110 @@ export async function countRecentPhoneAttempts(callerNumber, minutes = 60) {
     .gte("created_at", since);
   if (error) { console.error("[Database] countRecentPhoneAttempts error:", error); return 0; }
   return count ?? 0;
+}
+
+// ---- Custom Scenarios ----
+
+export async function getActiveCustomScenarios() {
+  const sb = getSupabase();
+  if (!sb) return [];
+  const { data, error } = await sb
+    .from("custom_scenarios")
+    .select("*")
+    .eq("is_active", true)
+    .order("created_at", { ascending: true });
+  if (error) { console.error("[Database] getActiveCustomScenarios error:", error); return []; }
+  return (data || []).map(toCustomScenarioCamel);
+}
+
+export async function getAllCustomScenarios() {
+  const sb = getSupabase();
+  if (!sb) return [];
+  const { data, error } = await sb
+    .from("custom_scenarios")
+    .select("*")
+    .order("created_at", { ascending: true });
+  if (error) { console.error("[Database] getAllCustomScenarios error:", error); return []; }
+  return (data || []).map(toCustomScenarioCamel);
+}
+
+export async function getCustomScenarioBySlug(slug) {
+  const sb = getSupabase();
+  if (!sb || !slug) return undefined;
+  const { data, error } = await sb.from("custom_scenarios").select("*").eq("slug", slug).single();
+  if (error && error.code !== "PGRST116") console.error("[Database] getCustomScenarioBySlug error:", error);
+  return data ? toCustomScenarioCamel(data) : undefined;
+}
+
+export async function getCustomScenarioById(id) {
+  const sb = getSupabase();
+  if (!sb) return undefined;
+  const { data, error } = await sb.from("custom_scenarios").select("*").eq("id", id).single();
+  if (error && error.code !== "PGRST116") console.error("[Database] getCustomScenarioById error:", error);
+  return data ? toCustomScenarioCamel(data) : undefined;
+}
+
+export async function createCustomScenario(data) {
+  const sb = getSupabase();
+  if (!sb) throw new Error("Supabase not available");
+  const row = {
+    slug: data.slug,
+    title: data.title,
+    description: data.description,
+    context_type: data.contextType || "inbound_call",
+    character_name: data.characterName,
+    character_prompt: data.characterPrompt,
+    opening_line: data.openingLine || null,
+    voice_id: data.voiceId || "Elliot",
+    voice_provider: data.voiceProvider || "vapi",
+    scoring_prompt: data.scoringPrompt || null,
+    is_active: data.isActive !== false,
+    created_by: data.createdBy || null,
+  };
+  const { data: result, error } = await sb
+    .from("custom_scenarios")
+    .insert(row)
+    .select("*")
+    .single();
+  if (error) throw error;
+  return toCustomScenarioCamel(result);
+}
+
+export async function updateCustomScenario(id, data) {
+  const sb = getSupabase();
+  if (!sb) throw new Error("Supabase not available");
+  const keyMap = {
+    slug: "slug",
+    title: "title",
+    description: "description",
+    contextType: "context_type",
+    characterName: "character_name",
+    characterPrompt: "character_prompt",
+    openingLine: "opening_line",
+    voiceId: "voice_id",
+    voiceProvider: "voice_provider",
+    scoringPrompt: "scoring_prompt",
+    isActive: "is_active",
+  };
+  const row = { updated_at: new Date().toISOString() };
+  for (const [k, v] of Object.entries(data)) {
+    if (v === undefined) continue;
+    const snakeKey = keyMap[k];
+    if (snakeKey) row[snakeKey] = v;
+  }
+  const { data: result, error } = await sb
+    .from("custom_scenarios")
+    .update(row)
+    .eq("id", id)
+    .select("*")
+    .single();
+  if (error) throw error;
+  return toCustomScenarioCamel(result);
+}
+
+export async function deleteCustomScenario(id) {
+  const sb = getSupabase();
+  if (!sb) throw new Error("Supabase not available");
+  const { error } = await sb.from("custom_scenarios").delete().eq("id", id);
+  if (error) throw error;
 }
