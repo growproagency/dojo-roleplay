@@ -5,6 +5,9 @@ import {
   changeAdminUserRole,
   assignAdminUserSchool,
   deleteAdminUser,
+  fetchAdminSchoolInvites,
+  createAdminSchoolInvite,
+  revokeAdminSchoolInvite,
 } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -12,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
@@ -39,6 +43,10 @@ import {
   Tag,
   User,
   AlertTriangle,
+  Mail,
+  UserPlus,
+  Copy,
+  CheckCircle2,
 } from "lucide-react";
 import { useState } from "react";
 import { useLocation, useRoute } from "wouter";
@@ -74,6 +82,10 @@ export default function AdminSchoolDetail() {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [unassignTarget, setUnassignTarget] = useState(null);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState("school_admin");
+  const [lastInviteUrl, setLastInviteUrl] = useState(null);
+  const [copiedToken, setCopiedToken] = useState(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ["admin", "school", schoolId],
@@ -99,6 +111,32 @@ export default function AdminSchoolDetail() {
       toast.success("Member removed from school");
     },
     onError: (err) => toast.error(err.message || "Failed to remove member"),
+  });
+
+  const { data: invites } = useQuery({
+    queryKey: ["admin", "school-invites", schoolId],
+    queryFn: () => fetchAdminSchoolInvites(schoolId),
+    enabled: isGlobalAdmin && schoolId != null,
+  });
+
+  const createInviteMutation = useMutation({
+    mutationFn: (data) => createAdminSchoolInvite(schoolId, data),
+    onSuccess: (invite) => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "school-invites", schoolId] });
+      setInviteEmail("");
+      setLastInviteUrl(invite.acceptUrl);
+      toast.success("Invite created. Share the link below.");
+    },
+    onError: (err) => toast.error(err.message || "Failed to create invite"),
+  });
+
+  const revokeInviteMutation = useMutation({
+    mutationFn: (inviteId) => revokeAdminSchoolInvite(schoolId, inviteId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "school-invites", schoolId] });
+      toast.success("Invite revoked");
+    },
+    onError: (err) => toast.error(err.message || "Failed to revoke invite"),
   });
 
   const deleteUserMutation = useMutation({
@@ -264,6 +302,148 @@ export default function AdminSchoolDetail() {
             </Card>
           )}
         </div>
+
+        {/* Invite section */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <UserPlus className="w-4 h-4 text-primary" />
+              Invite to this school
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!inviteEmail.trim()) return;
+                createInviteMutation.mutate({ email: inviteEmail.trim(), role: inviteRole });
+              }}
+              className="flex flex-col sm:flex-row gap-3 items-end"
+            >
+              <div className="flex-1 space-y-1.5 w-full">
+                <Label htmlFor="invite-email">Email</Label>
+                <Input
+                  id="invite-email"
+                  type="email"
+                  placeholder="schooladmin@example.com"
+                  value={inviteEmail}
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="space-y-1.5 w-full sm:w-44">
+                <Label htmlFor="invite-role">Role</Label>
+                <Select value={inviteRole} onValueChange={setInviteRole}>
+                  <SelectTrigger id="invite-role">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="school_admin">School Admin</SelectItem>
+                    <SelectItem value="staff">Staff</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button
+                type="submit"
+                disabled={createInviteMutation.isPending}
+                className="gap-2 w-full sm:w-auto"
+              >
+                {createInviteMutation.isPending ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Mail className="w-4 h-4" />
+                )}
+                Create invite
+              </Button>
+            </form>
+
+            {lastInviteUrl && (
+              <div className="mt-4 p-3 rounded-lg bg-primary/5 border border-primary/20">
+                <p className="text-xs text-muted-foreground mb-2 font-medium">
+                  Share this link with the new member:
+                </p>
+                <div className="flex items-center gap-2 p-2 rounded bg-background border">
+                  <span className="font-mono text-xs flex-1 truncate text-foreground">
+                    {lastInviteUrl}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(lastInviteUrl);
+                      setCopiedToken("latest");
+                      toast.success("Invite link copied!");
+                      setTimeout(() => setCopiedToken(null), 2000);
+                    }}
+                    className="p-1.5 rounded hover:bg-accent transition-colors shrink-0"
+                    title="Copy link"
+                  >
+                    {copiedToken === "latest" ? (
+                      <CheckCircle2 className="w-4 h-4 text-green-400" />
+                    ) : (
+                      <Copy className="w-4 h-4 text-muted-foreground" />
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {invites && invites.length > 0 && (
+              <div className="mt-6">
+                <p className="text-xs font-medium text-muted-foreground mb-2">
+                  Pending invites ({invites.length})
+                </p>
+                <div className="divide-y divide-border">
+                  {invites.map((invite) => {
+                    const acceptUrl = `${window.location.origin}/invite/${invite.token}`;
+                    return (
+                      <div key={invite.id} className="flex items-center justify-between gap-3 py-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-sm font-medium truncate">{invite.email}</span>
+                            <RoleBadge role={invite.role} />
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            Expires {formatDate(invite.expiresAt)}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              navigator.clipboard.writeText(acceptUrl);
+                              setCopiedToken(invite.token);
+                              toast.success("Invite link copied!");
+                              setTimeout(() => setCopiedToken(null), 2000);
+                            }}
+                          >
+                            {copiedToken === invite.token ? (
+                              <CheckCircle2 className="w-4 h-4 text-green-400" />
+                            ) : (
+                              <Copy className="w-4 h-4" />
+                            )}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              if (confirm(`Revoke invite for ${invite.email}?`)) {
+                                revokeInviteMutation.mutate(invite.id);
+                              }
+                            }}
+                            className="text-destructive hover:text-destructive"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         {/* Members table */}
         <Card>
