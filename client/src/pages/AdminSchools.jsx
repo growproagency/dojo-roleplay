@@ -250,7 +250,7 @@ export default function AdminSchools() {
               autoFocus
             />
           </div>
-          <DialogFooter className="gap-2 sm:gap-0">
+          <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => { setDeleteTarget(null); setDeleteConfirmText(""); }}>
               Cancel
             </Button>

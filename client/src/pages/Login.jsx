@@ -40,6 +40,11 @@ export default function Login() {
 
   const handleEmailAuth = async (e) => {
     e.preventDefault();
+    // Block signup when not from an invite — this is an invite-only platform
+    if (isSignUp && !pendingInviteToken) {
+      toast.error("Dojo Roleplay is invite-only. Please ask your school admin for an invite link.");
+      return;
+    }
     setLoading(true);
     try {
       if (isSignUp) {
@@ -100,14 +105,9 @@ export default function Login() {
         </CardHeader>
         <CardContent className="space-y-4">
           {/* OAuth buttons */}
-          <div className="grid grid-cols-2 gap-3">
-            <Button variant="outline" onClick={() => handleOAuthLogin("google")} className="bg-transparent">
-              Google
-            </Button>
-            <Button variant="outline" onClick={() => handleOAuthLogin("github")} className="bg-transparent">
-              GitHub
-            </Button>
-          </div>
+          <Button variant="outline" onClick={() => handleOAuthLogin("google")} className="w-full bg-transparent">
+            Continue with Google
+          </Button>
 
           <div className="relative">
             <Separator />
@@ -160,15 +160,21 @@ export default function Login() {
             </Button>
           </form>
 
-          <p className="text-center text-sm text-muted-foreground">
-            {isSignUp ? "Already have an account?" : "Don't have an account?"}{" "}
-            <button
-              onClick={() => setIsSignUp(!isSignUp)}
-              className="text-primary hover:underline font-medium"
-            >
-              {isSignUp ? "Sign in" : "Sign up"}
-            </button>
-          </p>
+          {isFromInvite ? (
+            <p className="text-center text-sm text-muted-foreground">
+              {isSignUp ? "Already have an account?" : "Don't have an account?"}{" "}
+              <button
+                onClick={() => setIsSignUp(!isSignUp)}
+                className="text-primary hover:underline font-medium"
+              >
+                {isSignUp ? "Sign in" : "Sign up"}
+              </button>
+            </p>
+          ) : (
+            <p className="text-center text-xs text-muted-foreground">
+              Dojo Roleplay is invite-only. Contact your school admin for an invite link.
+            </p>
+          )}
         </CardContent>
       </Card>
     </div>

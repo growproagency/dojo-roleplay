@@ -55,7 +55,7 @@ export default function DashboardLayout({
     const saved = localStorage.getItem(SIDEBAR_WIDTH_KEY);
     return saved ? parseInt(saved, 10) : DEFAULT_WIDTH;
   });
-  const { loading, user } = useAuth();
+  const { loading, user, isGlobalAdmin, logout } = useAuth();
 
   useEffect(() => {
     localStorage.setItem(SIDEBAR_WIDTH_KEY, sidebarWidth.toString());
@@ -85,6 +85,34 @@ export default function DashboardLayout({
             className="w-full shadow-lg hover:shadow-xl transition-all"
           >
             Sign in
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // Authenticated but not attached to a school (and not a global admin)
+  // This happens if someone signs up via OAuth without an invite.
+  if (!user.schoolId && !isGlobalAdmin) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-background">
+        <div className="flex flex-col items-center gap-6 p-8 max-w-md w-full text-center">
+          <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center">
+            <span className="text-2xl">✉️</span>
+          </div>
+          <h1 className="text-2xl font-semibold tracking-tight">
+            Waiting for your invite
+          </h1>
+          <p className="text-sm text-muted-foreground max-w-sm">
+            Your account ({user.email}) isn't attached to a school yet. Dojo Roleplay is invite-only — ask your school admin for an invite link, then open that link in this browser to join.
+          </p>
+          <Button
+            onClick={logout}
+            variant="outline"
+            size="lg"
+            className="w-full"
+          >
+            Sign out
           </Button>
         </div>
       </div>

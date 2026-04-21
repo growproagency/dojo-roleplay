@@ -394,7 +394,7 @@ export default function Members() {
               Remove <strong>{removeTarget?.name || removeTarget?.email}</strong> from the school? They will keep their account but lose access.
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter className="gap-2 sm:gap-0">
+          <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setRemoveTarget(null)}>
               Cancel
             </Button>
@@ -423,7 +423,7 @@ export default function Members() {
               Revoke the invite for <strong>{revokeTarget?.email}</strong>? They will no longer be able to use this invite link.
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter className="gap-2 sm:gap-0">
+          <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setRevokeTarget(null)}>
               Cancel
             </Button>
