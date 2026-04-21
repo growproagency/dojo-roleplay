@@ -15,6 +15,9 @@ import {
   updateUserRole,
   deleteUser,
   getCallsBySchool,
+  createInvite,
+  getPendingInvitesForSchool,
+  revokeInvite,
 } from "../db.js";
 
 const router = Router();
@@ -155,6 +158,88 @@ router.delete("/schools/:id", async (req, res) => {
   } catch (err) {
     console.error("[Admin] delete school error:", err);
     res.status(500).json({ message: "Failed to delete school" });
+  }
+});
+
+// ============================================
+// Invites for any school (global admin)
+// ============================================
+
+const adminInviteSchema = z.object({
+  email: z.string().email().max(320),
+  role: z.enum(["staff", "school_admin"]).optional().default("staff"),
+});
+
+// GET /api/admin/schools/:id/invites — list pending invites for a school
+router.get("/schools/:id/invites", async (req, res) => {
+  try {
+    const schoolId = parseInt(req.params.id, 10);
+    if (isNaN(schoolId)) return res.status(400).json({ message: "Invalid school ID" });
+
+    const school = await getSchoolById(schoolId);
+    if (!school) return res.status(404).json({ message: "School not found" });
+
+    const invites = await getPendingInvitesForSchool(schoolId);
+    res.json(invites);
+  } catch (err) {
+    console.error("[Admin] list invites error:", err);
+    res.status(500).json({ message: "Failed to fetch invites" });
+  }
+});
+
+// POST /api/admin/schools/:id/invites — create an invite for any school
+router.post("/schools/:id/invites", async (req, res) => {
+  try {
+    const schoolId = parseInt(req.params.id, 10);
+    if (isNaN(schoolId)) return res.status(400).json({ message: "Invalid school ID" });
+
+    const school = await getSchoolById(schoolId);
+    if (!school) return res.status(404).json({ message: "School not found" });
+
+    const parsed = adminInviteSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "Invalid invite data", errors: parsed.error.issues });
+    }
+
+    const invite = await createInvite({
+      schoolId,
+      email: parsed.data.email,
+      role: parsed.data.role,
+      invitedBy: req.user.id,
+      expiresInDays: 7,
+    });
+
+    const origin = req.headers.origin || req.headers.referer || "";
+    const acceptUrl = origin
+      ? `${origin.replace(/\/$/, "")}/invite/${invite.token}`
+      : `/invite/${invite.token}`;
+
+    res.json({ ...invite, acceptUrl });
+  } catch (err) {
+    if (err?.code === "23505") {
+      return res.status(409).json({ message: "An active invite already exists for this email" });
+    }
+    console.error("[Admin] create invite error:", err);
+    res.status(500).json({ message: "Failed to create invite" });
+  }
+});
+
+// DELETE /api/admin/schools/:id/invites/:inviteId — revoke an invite
+router.delete("/schools/:id/invites/:inviteId", async (req, res) => {
+  try {
+    const schoolId = parseInt(req.params.id, 10);
+    const inviteId = parseInt(req.params.inviteId, 10);
+    if (isNaN(schoolId) || isNaN(inviteId)) return res.status(400).json({ message: "Invalid ID" });
+
+    const invites = await getPendingInvitesForSchool(schoolId);
+    const target = invites.find(i => i.id === inviteId);
+    if (!target) return res.status(404).json({ message: "Invite not found" });
+
+    await revokeInvite(inviteId);
+    res.json({ success: true });
+  } catch (err) {
+    console.error("[Admin] revoke invite error:", err);
+    res.status(500).json({ message: "Failed to revoke invite" });
   }
 });
 
