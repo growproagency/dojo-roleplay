@@ -376,15 +376,17 @@ export async function getScorecardByCallId(callId) {
 
 // ---- Leaderboard (JS aggregation) ----
 
-export async function getLeaderboard(schoolId) {
+export async function getLeaderboard(schoolId, { scenario, fromDate } = {}) {
   const sb = getSupabase();
   if (!sb) return [];
 
-  // Fetch calls (optionally scoped to a school) with user info
+  // Fetch calls (optionally scoped to a school, scenario, or date) with user info
   let callsQuery = sb
     .from("calls")
-    .select("id, user_id, school_id, status, created_at, users!inner(name)");
+    .select("id, user_id, school_id, scenario, status, created_at, users!inner(name)");
   if (schoolId != null) callsQuery = callsQuery.eq("school_id", schoolId);
+  if (scenario) callsQuery = callsQuery.eq("scenario", scenario);
+  if (fromDate) callsQuery = callsQuery.gte("created_at", fromDate);
   const { data: callRows, error: callErr } = await callsQuery;
   if (callErr) { console.error("[Database] getLeaderboard calls error:", callErr); return []; }
 
