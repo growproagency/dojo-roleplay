@@ -9,6 +9,7 @@ import {
   createAdminSchoolInvite,
   revokeAdminSchoolInvite,
   resetAdminUserPassword,
+  fetchAdminUsers,
 } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -89,6 +90,9 @@ export default function AdminSchoolDetail() {
   const [lastInviteUrl, setLastInviteUrl] = useState(null);
   const [copiedToken, setCopiedToken] = useState(null);
   const [resetResult, setResetResult] = useState(null);
+  const [showAddExisting, setShowAddExisting] = useState(false);
+  const [addUserId, setAddUserId] = useState("");
+  const [addRole, setAddRole] = useState("staff");
 
   const { data, isLoading } = useQuery({
     queryKey: ["admin", "school", schoolId],
@@ -140,6 +144,32 @@ export default function AdminSchoolDetail() {
       toast.success("Invite revoked");
     },
     onError: (err) => toast.error(err.message || "Failed to revoke invite"),
+  });
+
+  const { data: allUsers } = useQuery({
+    queryKey: ["admin", "users"],
+    queryFn: fetchAdminUsers,
+    enabled: isGlobalAdmin && showAddExisting,
+  });
+
+  const unattachedUsers = (allUsers || []).filter(u => !u.schoolId);
+
+  const addExistingMutation = useMutation({
+    mutationFn: async ({ userId, role }) => {
+      // Assign school then update role
+      await assignAdminUserSchool(userId, schoolId);
+      await changeAdminUserRole(userId, role);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "school", schoolId] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "schools"] });
+      setShowAddExisting(false);
+      setAddUserId("");
+      setAddRole("staff");
+      toast.success("User added to school");
+    },
+    onError: (err) => toast.error(err.message || "Failed to add user"),
   });
 
   const resetPasswordMutation = useMutation({
@@ -317,11 +347,20 @@ export default function AdminSchoolDetail() {
 
         {/* Invite section */}
         <Card>
-          <CardHeader className="pb-3">
+          <CardHeader className="pb-3 flex flex-row items-center justify-between">
             <CardTitle className="text-base flex items-center gap-2">
               <UserPlus className="w-4 h-4 text-primary" />
               Invite to this school
             </CardTitle>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowAddExisting(true)}
+              className="gap-2"
+            >
+              <User className="w-4 h-4" />
+              Add existing user
+            </Button>
           </CardHeader>
           <CardContent>
             <form
@@ -576,6 +615,71 @@ export default function AdminSchoolDetail() {
             >
               {unassignMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
               Remove from school
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add existing user modal */}
+      <Dialog open={showAddExisting} onOpenChange={(open) => { if (!open) setShowAddExisting(false); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <User className="w-5 h-5 text-primary" />
+              Add existing user
+            </DialogTitle>
+            <DialogDescription>
+              Attach an existing user who isn't currently in any school. They must already have an account.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="add-user">User</Label>
+              {unattachedUsers.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-2">
+                  No unattached users. Every existing user already belongs to a school.
+                </p>
+              ) : (
+                <Select value={addUserId} onValueChange={setAddUserId}>
+                  <SelectTrigger id="add-user">
+                    <SelectValue placeholder="Select a user..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {unattachedUsers.map(u => (
+                      <SelectItem key={u.id} value={String(u.id)}>
+                        {u.name ? `${u.name} — ${u.email}` : u.email}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+            {unattachedUsers.length > 0 && (
+              <div className="space-y-1.5">
+                <Label htmlFor="add-role">Role</Label>
+                <Select value={addRole} onValueChange={setAddRole}>
+                  <SelectTrigger id="add-role">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="staff">Staff</SelectItem>
+                    <SelectItem value="school_admin">School Admin</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setShowAddExisting(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => addExistingMutation.mutate({ userId: parseInt(addUserId, 10), role: addRole })}
+              disabled={!addUserId || addExistingMutation.isPending || unattachedUsers.length === 0}
+              className="gap-2"
+            >
+              {addExistingMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+              Add to school
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -151,7 +151,7 @@ function DashboardLayoutContent({
   children,
   setSidebarWidth,
 }) {
-  const { user, isSchoolAdmin, isGlobalAdmin, logout } = useAuth();
+  const { user, school, isSchoolAdmin, isGlobalAdmin, logout } = useAuth();
   const [location, setLocation] = useLocation();
   const { state, toggleSidebar } = useSidebar();
   const isCollapsed = state === "collapsed";
@@ -221,9 +221,12 @@ function DashboardLayoutContent({
                 <PanelLeft className="h-4 w-4 text-muted-foreground" />
               </button>
               {!isCollapsed ? (
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="font-semibold tracking-tight truncate">
-                    Navigation
+                <div className="flex flex-col min-w-0 leading-tight">
+                  <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
+                    Dojo Roleplay
+                  </span>
+                  <span className="text-sm font-semibold tracking-tight truncate">
+                    {school?.name || (isGlobalAdmin ? "Global Admin" : "Navigation")}
                   </span>
                 </div>
               ) : null}
