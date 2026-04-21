@@ -80,56 +80,14 @@ export default function Leaderboard() {
           </p>
         </div>
 
-        {/* Filters */}
-        <Card className="bg-card border-border">
-          <CardContent className="p-4 flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground shrink-0">
-              <Filter className="w-4 h-4" />
-              <span>Filter:</span>
-            </div>
-            <Select value={range} onValueChange={setRange}>
-              <SelectTrigger className="w-full sm:w-36">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All time</SelectItem>
-                <SelectItem value="7d">Last 7 days</SelectItem>
-                <SelectItem value="30d">Last 30 days</SelectItem>
-                <SelectItem value="90d">Last 90 days</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={scenario} onValueChange={setScenario}>
-              <SelectTrigger className="w-full sm:w-52">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All scenarios</SelectItem>
-                {(scenarios || []).map(s => (
-                  <SelectItem key={s.id} value={s.id}>{s.title}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </CardContent>
-        </Card>
-
         {isLoading ? (
           <div className="flex items-center justify-center min-h-[40vh]">
             <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
           </div>
-        ) : !data || data.length === 0 ? (
-          <Card className="bg-card border-border">
-            <CardContent className="py-16 text-center">
-              <Trophy className="w-12 h-12 text-muted-foreground/20 mx-auto mb-4" />
-              <p className="text-muted-foreground font-medium">No calls scored yet.</p>
-              <p className="text-sm text-muted-foreground/70 mt-1">
-                Complete and score a call to appear on the leaderboard.
-              </p>
-            </CardContent>
-          </Card>
         ) : (
           <>
             {/* Top 3 podium */}
-            {data.length >= 1 && (
+            {data && data.length >= 1 && (
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 {data.slice(0, 3).map((entry) => (
                   <Card
@@ -167,58 +125,97 @@ export default function Leaderboard() {
               </div>
             )}
 
-            {/* Full table */}
+            {/* Full table with filters */}
             <Card className="bg-card border-border">
-              <CardHeader className="pb-3">
+              <CardHeader className="py-3">
                 <CardTitle className="text-base flex items-center gap-2">
                   <TrendingUp className="w-4 h-4 text-primary" />
                   All Rankings
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-0">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-border">
-                        <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Rank</th>
-                        <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Staff Member</th>
-                        <th className="text-right px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Avg Score</th>
-                        <th className="text-right px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Best Score</th>
-                        <th className="text-right px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Total Calls</th>
-                        <th className="text-right px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Scored</th>
-                        <th className="text-right px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Last Call</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {data.map((entry) => (
-                        <tr
-                          key={entry.userId}
-                          className="border-b border-border/50 hover:bg-secondary/30 transition-colors"
-                        >
-                          <td className="px-4 py-3">
-                            <div className="flex items-center">
-                              <RankIcon rank={entry.rank} />
-                            </div>
-                          </td>
-                          <td className="px-4 py-3 font-medium">{entry.userName}</td>
-                          <td className="px-4 py-3 text-right">
-                            <ScoreBadge score={entry.avgScore} />
-                          </td>
-                          <td className="px-4 py-3 text-right">
-                            {entry.bestScore !== null ? (
-                              <span className="text-sm font-medium text-foreground">{entry.bestScore}</span>
-                            ) : (
-                              <span className="text-muted-foreground">—</span>
-                            )}
-                          </td>
-                          <td className="px-4 py-3 text-right text-muted-foreground">{entry.totalCalls}</td>
-                          <td className="px-4 py-3 text-right text-muted-foreground">{entry.scoredCalls}</td>
-                          <td className="px-4 py-3 text-right text-muted-foreground text-xs">{formatDate(entry.lastCallAt)}</td>
-                        </tr>
+                <div className="px-4 py-2 border-b border-border flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground shrink-0">
+                    <Filter className="w-4 h-4" />
+                    <span>Filter:</span>
+                  </div>
+                  <Select value={range} onValueChange={setRange}>
+                    <SelectTrigger className="w-full sm:w-36">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All time</SelectItem>
+                      <SelectItem value="7d">Last 7 days</SelectItem>
+                      <SelectItem value="30d">Last 30 days</SelectItem>
+                      <SelectItem value="90d">Last 90 days</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select value={scenario} onValueChange={setScenario}>
+                    <SelectTrigger className="w-full sm:w-52">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All scenarios</SelectItem>
+                      {(scenarios || []).map(s => (
+                        <SelectItem key={s.id} value={s.id}>{s.title}</SelectItem>
                       ))}
-                    </tbody>
-                  </table>
+                    </SelectContent>
+                  </Select>
                 </div>
+
+                {!data || data.length === 0 ? (
+                  <div className="py-16 text-center">
+                    <Trophy className="w-12 h-12 text-muted-foreground/20 mx-auto mb-4" />
+                    <p className="text-muted-foreground font-medium">No calls scored yet.</p>
+                    <p className="text-sm text-muted-foreground/70 mt-1">
+                      Complete and score a call to appear on the leaderboard.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-border">
+                          <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Rank</th>
+                          <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Staff Member</th>
+                          <th className="text-right px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Avg Score</th>
+                          <th className="text-right px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Best Score</th>
+                          <th className="text-right px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Total Calls</th>
+                          <th className="text-right px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Scored</th>
+                          <th className="text-right px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Last Call</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {data.map((entry) => (
+                          <tr
+                            key={entry.userId}
+                            className="border-b border-border/50 hover:bg-secondary/30 transition-colors"
+                          >
+                            <td className="px-4 py-3">
+                              <div className="flex items-center">
+                                <RankIcon rank={entry.rank} />
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 font-medium">{entry.userName}</td>
+                            <td className="px-4 py-3 text-right">
+                              <ScoreBadge score={entry.avgScore} />
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                              {entry.bestScore !== null ? (
+                                <span className="text-sm font-medium text-foreground">{entry.bestScore}</span>
+                              ) : (
+                                <span className="text-muted-foreground">—</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 text-right text-muted-foreground">{entry.totalCalls}</td>
+                            <td className="px-4 py-3 text-right text-muted-foreground">{entry.scoredCalls}</td>
+                            <td className="px-4 py-3 text-right text-muted-foreground text-xs">{formatDate(entry.lastCallAt)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </>
