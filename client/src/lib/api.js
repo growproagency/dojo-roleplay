@@ -61,6 +61,7 @@ export const fetchSchool = () => apiFetch("/school");
 export const updateSchool = (data) => apiFetch("/school", { method: "PUT", body: JSON.stringify(data) });
 export const fetchSchoolMembers = () => apiFetch("/school/members");
 export const removeSchoolMember = (userId) => apiFetch(`/school/members/${userId}`, { method: "DELETE" });
+export const resetSchoolMemberPassword = (userId) => apiFetch(`/school/members/${userId}/reset-password`, { method: "POST" });
 
 // ---- Invites (school admin) ----
 export const fetchSchoolInvites = () => apiFetch("/school/invites");
@@ -92,3 +93,4 @@ export const revokeAdminSchoolInvite = (schoolId, inviteId) => apiFetch(`/admin/
 export const changeAdminUserRole = (id, role) => apiFetch(`/admin/users/${id}/role`, { method: "PUT", body: JSON.stringify({ role }) });
 export const assignAdminUserSchool = (id, schoolId) => apiFetch(`/admin/users/${id}/school`, { method: "PUT", body: JSON.stringify({ schoolId }) });
 export const deleteAdminUser = (id) => apiFetch(`/admin/users/${id}`, { method: "DELETE" });
+export const resetAdminUserPassword = (id) => apiFetch(`/admin/users/${id}/reset-password`, { method: "POST" });

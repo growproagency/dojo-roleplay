@@ -18,6 +18,8 @@ import {
   createInvite,
   getPendingInvitesForSchool,
   revokeInvite,
+  generatePasswordRecoveryLink,
+  getUserById,
 } from "../db.js";
 
 const router = Router();
@@ -312,6 +314,28 @@ router.put("/users/:id/school", async (req, res) => {
   } catch (err) {
     console.error("[Admin] assign school error:", err);
     res.status(500).json({ message: "Failed to assign school" });
+  }
+});
+
+// POST /api/admin/users/:id/reset-password — generate a recovery link for any user
+router.post("/users/:id/reset-password", async (req, res) => {
+  try {
+    const userId = parseInt(req.params.id, 10);
+    if (isNaN(userId)) return res.status(400).json({ message: "Invalid user ID" });
+
+    const user = await getUserById(userId);
+    if (!user?.email) return res.status(404).json({ message: "User not found" });
+
+    const origin = req.headers.origin || req.headers.referer || "";
+    const redirectTo = origin ? `${origin.replace(/\/$/, "")}/reset-password` : undefined;
+
+    const link = await generatePasswordRecoveryLink(user.email, redirectTo);
+    if (!link) return res.status(500).json({ message: "Failed to generate recovery link" });
+
+    res.json({ email: user.email, link });
+  } catch (err) {
+    console.error("[Admin] reset password error:", err);
+    res.status(500).json({ message: "Failed to generate recovery link" });
   }
 });
 

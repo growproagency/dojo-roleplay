@@ -5,6 +5,7 @@ import {
   createSchoolInvite,
   revokeSchoolInvite,
   removeSchoolMember,
+  resetSchoolMemberPassword,
 } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -38,6 +39,7 @@ import {
   ShieldAlert,
   UserPlus,
   AlertTriangle,
+  KeyRound,
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -71,6 +73,7 @@ export default function Members() {
   const [lastInviteUrl, setLastInviteUrl] = useState(null);
   const [removeTarget, setRemoveTarget] = useState(null);
   const [revokeTarget, setRevokeTarget] = useState(null);
+  const [resetResult, setResetResult] = useState(null); // { email, link }
 
   const { data: members, isLoading: membersLoading } = useQuery({
     queryKey: ["school", "members"],
@@ -104,6 +107,15 @@ export default function Members() {
       toast.success("Invite revoked");
     },
     onError: (err) => toast.error(err.message || "Failed to revoke invite"),
+  });
+
+  const resetPasswordMutation = useMutation({
+    mutationFn: resetSchoolMemberPassword,
+    onSuccess: (result) => {
+      setResetResult(result);
+      toast.success("Recovery link generated");
+    },
+    onError: (err) => toast.error(err.message || "Failed to generate recovery link"),
   });
 
   const removeMemberMutation = useMutation({
@@ -363,15 +375,28 @@ export default function Members() {
                         </p>
                       </div>
                       {!isSelf && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleRemoveMember(member)}
-                          disabled={removeMemberMutation.isPending}
-                          className="text-destructive hover:text-destructive shrink-0"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => resetPasswordMutation.mutate(member.id)}
+                            disabled={resetPasswordMutation.isPending}
+                            title="Reset password"
+                            className="text-muted-foreground hover:text-foreground"
+                          >
+                            <KeyRound className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleRemoveMember(member)}
+                            disabled={removeMemberMutation.isPending}
+                            className="text-destructive hover:text-destructive"
+                            title="Remove from school"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
                       )}
                     </div>
                   );
@@ -407,6 +432,42 @@ export default function Members() {
               {removeMemberMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
               Remove
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Password reset link modal */}
+      <Dialog open={!!resetResult} onOpenChange={(open) => { if (!open) setResetResult(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <KeyRound className="w-5 h-5 text-primary" />
+              Password reset link
+            </DialogTitle>
+            <DialogDescription>
+              Share this link with <strong>{resetResult?.email}</strong>. When they open it, they'll be able to set a new password.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="p-2 rounded bg-secondary border text-xs font-mono break-all">
+              {resetResult?.link}
+            </div>
+            <Button
+              onClick={() => {
+                if (resetResult?.link) {
+                  navigator.clipboard.writeText(resetResult.link);
+                  toast.success("Link copied!");
+                }
+              }}
+              variant="outline"
+              className="w-full gap-2"
+            >
+              <Copy className="w-4 h-4" />
+              Copy link
+            </Button>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setResetResult(null)}>Done</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

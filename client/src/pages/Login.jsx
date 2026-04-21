@@ -104,17 +104,21 @@ export default function Login() {
           </p>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* OAuth buttons */}
-          <Button variant="outline" onClick={() => handleOAuthLogin("google")} className="w-full bg-transparent">
-            Continue with Google
-          </Button>
+          {/* OAuth buttons (hidden for now) */}
+          {false && (
+            <>
+              <Button variant="outline" onClick={() => handleOAuthLogin("google")} className="w-full bg-transparent">
+                Continue with Google
+              </Button>
 
-          <div className="relative">
-            <Separator />
-            <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-card px-2 text-xs text-muted-foreground">
-              or
-            </span>
-          </div>
+              <div className="relative">
+                <Separator />
+                <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-card px-2 text-xs text-muted-foreground">
+                  or
+                </span>
+              </div>
+            </>
+          )}
 
           {/* Email/password form */}
           <form onSubmit={handleEmailAuth} className="space-y-3">

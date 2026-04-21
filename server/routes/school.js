@@ -12,6 +12,7 @@ import {
   createInvite,
   getPendingInvitesForSchool,
   revokeInvite,
+  generatePasswordRecoveryLink,
 } from "../db.js";
 
 const router = Router();
@@ -89,6 +90,30 @@ router.delete("/members/:userId", requireSchoolAdmin, async (req, res) => {
   } catch (err) {
     console.error("[School] remove member error:", err);
     res.status(500).json({ message: "Failed to remove member" });
+  }
+});
+
+// POST /api/school/members/:userId/reset-password — generate a password recovery link for a member
+router.post("/members/:userId/reset-password", requireSchoolAdmin, async (req, res) => {
+  try {
+    const userId = parseInt(req.params.userId, 10);
+    if (isNaN(userId)) return res.status(400).json({ message: "Invalid user id" });
+
+    // Verify the target user belongs to the school admin's school
+    const members = await getUsersBySchool(req.user.schoolId);
+    const target = members.find(m => m.id === userId);
+    if (!target) return res.status(404).json({ message: "Member not found in your school" });
+
+    const origin = req.headers.origin || req.headers.referer || "";
+    const redirectTo = origin ? `${origin.replace(/\/$/, "")}/reset-password` : undefined;
+
+    const link = await generatePasswordRecoveryLink(target.email, redirectTo);
+    if (!link) return res.status(500).json({ message: "Failed to generate recovery link" });
+
+    res.json({ email: target.email, link });
+  } catch (err) {
+    console.error("[School] reset password error:", err);
+    res.status(500).json({ message: "Failed to generate recovery link" });
   }
 });
 
