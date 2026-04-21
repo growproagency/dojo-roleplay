@@ -362,7 +362,7 @@ export default function AdminSchoolDetail() {
               Remove <strong>{unassignTarget?.name || unassignTarget?.email}</strong> from {school?.name}? They will keep their account but lose access to this school.
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter className="gap-2 sm:gap-0">
+          <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setUnassignTarget(null)}>
               Cancel
             </Button>
@@ -399,7 +399,7 @@ export default function AdminSchoolDetail() {
               autoFocus
             />
           </div>
-          <DialogFooter className="gap-2 sm:gap-0">
+          <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => { setDeleteTarget(null); setDeleteConfirmText(""); }}>
               Cancel
             </Button>
