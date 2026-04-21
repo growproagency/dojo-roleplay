@@ -1,8 +1,15 @@
 import DashboardLayout from "@/components/DashboardLayout";
-import { fetchLeaderboard } from "@/lib/api";
+import { fetchLeaderboard, fetchScenarios } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Trophy,
   Phone,
@@ -10,7 +17,9 @@ import {
   Star,
   Loader2,
   Medal,
+  Filter,
 } from "lucide-react";
+import { useState } from "react";
 
 function ScoreBadge({ score }) {
   if (score === null) return <span className="text-muted-foreground text-sm">—</span>;
@@ -39,7 +48,23 @@ function formatDate(date) {
 }
 
 export default function Leaderboard() {
-  const { data, isLoading } = useQuery({ queryKey: ["leaderboard"], queryFn: fetchLeaderboard });
+  const [range, setRange] = useState("all");
+  const [scenario, setScenario] = useState("all");
+
+  const { data: scenarios } = useQuery({
+    queryKey: ["scenarios"],
+    queryFn: fetchScenarios,
+  });
+
+  const filters = {
+    ...(range !== "all" && { range }),
+    ...(scenario !== "all" && { scenario }),
+  };
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["leaderboard", range, scenario],
+    queryFn: () => fetchLeaderboard(filters),
+  });
 
   return (
     <DashboardLayout>
@@ -54,6 +79,38 @@ export default function Leaderboard() {
             Rankings based on average scorecard score across all completed calls.
           </p>
         </div>
+
+        {/* Filters */}
+        <Card className="bg-card border-border">
+          <CardContent className="p-4 flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground shrink-0">
+              <Filter className="w-4 h-4" />
+              <span>Filter:</span>
+            </div>
+            <Select value={range} onValueChange={setRange}>
+              <SelectTrigger className="w-full sm:w-36">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All time</SelectItem>
+                <SelectItem value="7d">Last 7 days</SelectItem>
+                <SelectItem value="30d">Last 30 days</SelectItem>
+                <SelectItem value="90d">Last 90 days</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={scenario} onValueChange={setScenario}>
+              <SelectTrigger className="w-full sm:w-52">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All scenarios</SelectItem>
+                {(scenarios || []).map(s => (
+                  <SelectItem key={s.id} value={s.id}>{s.title}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </CardContent>
+        </Card>
 
         {isLoading ? (
           <div className="flex items-center justify-center min-h-[40vh]">

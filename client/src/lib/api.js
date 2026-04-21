@@ -44,7 +44,13 @@ export const fetchCall = (id) => apiFetch(`/calls/${id}`);
 export const triggerScoring = (callId) => apiFetch(`/calls/${callId}/score`, { method: "POST" });
 export const fetchSettings = () => apiFetch("/settings");
 export const saveSettings = (data) => apiFetch("/settings", { method: "PUT", body: JSON.stringify(data) });
-export const fetchLeaderboard = () => apiFetch("/leaderboard");
+export const fetchLeaderboard = (params = {}) => {
+  const qs = new URLSearchParams();
+  if (params.scenario) qs.set("scenario", params.scenario);
+  if (params.range) qs.set("range", params.range);
+  const query = qs.toString();
+  return apiFetch(`/leaderboard${query ? `?${query}` : ""}`);
+};
 export const fetchUsage = (params) => {
   const qs = new URLSearchParams();
   if (params.fromDate) qs.set("fromDate", params.fromDate);

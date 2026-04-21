@@ -23,7 +23,14 @@ router.get("/", requireUser, async (req, res) => {
       schoolId = user.schoolId;
     }
 
-    const leaderboard = await getLeaderboard(schoolId);
+    const scenario = typeof req.query.scenario === "string" && req.query.scenario ? req.query.scenario : undefined;
+    const range = req.query.range; // "7d" | "30d" | "90d" | "all"
+    let fromDate;
+    if (range === "7d") fromDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    else if (range === "30d") fromDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    else if (range === "90d") fromDate = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
+
+    const leaderboard = await getLeaderboard(schoolId, { scenario, fromDate });
     res.json(leaderboard);
   } catch (err) {
     console.error("[Leaderboard] error:", err);
