@@ -232,22 +232,40 @@ function DashboardLayoutContent({
 
           <SidebarContent className="gap-0">
             <SidebarMenu className="px-2 py-1">
-              {visibleMenuItems.map(item => {
+              {visibleMenuItems.map((item, idx) => {
                 const isActive = location === item.path;
+                const prevItem = visibleMenuItems[idx - 1];
+                const isFirstGlobalAdmin =
+                  item.requires === "globalAdmin" &&
+                  prevItem &&
+                  prevItem.requires !== "globalAdmin";
                 return (
-                  <SidebarMenuItem key={item.path}>
-                    <SidebarMenuButton
-                      isActive={isActive}
-                      onClick={() => setLocation(item.path)}
-                      tooltip={item.label}
-                      className={`h-10 transition-all font-normal`}
-                    >
-                      <item.icon
-                        className={`h-4 w-4 ${isActive ? "text-primary" : ""}`}
-                      />
-                      <span>{item.label}</span>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
+                  <div key={item.path}>
+                    {isFirstGlobalAdmin && !isCollapsed && (
+                      <div className="mt-3 mb-1 px-3">
+                        <div className="border-t border-border mb-2" />
+                        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                          Global
+                        </span>
+                      </div>
+                    )}
+                    {isFirstGlobalAdmin && isCollapsed && (
+                      <div className="my-2 mx-2 border-t border-border" />
+                    )}
+                    <SidebarMenuItem>
+                      <SidebarMenuButton
+                        isActive={isActive}
+                        onClick={() => setLocation(item.path)}
+                        tooltip={item.label}
+                        className={`h-10 transition-all font-normal`}
+                      >
+                        <item.icon
+                          className={`h-4 w-4 ${isActive ? "text-primary" : ""}`}
+                        />
+                        <span>{item.label}</span>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  </div>
                 );
               })}
             </SidebarMenu>

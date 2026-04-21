@@ -8,6 +8,7 @@ import {
   fetchAdminSchoolInvites,
   createAdminSchoolInvite,
   revokeAdminSchoolInvite,
+  resetAdminUserPassword,
 } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -47,6 +48,7 @@ import {
   UserPlus,
   Copy,
   CheckCircle2,
+  KeyRound,
 } from "lucide-react";
 import { useState } from "react";
 import { useLocation, useRoute } from "wouter";
@@ -86,6 +88,7 @@ export default function AdminSchoolDetail() {
   const [inviteRole, setInviteRole] = useState("school_admin");
   const [lastInviteUrl, setLastInviteUrl] = useState(null);
   const [copiedToken, setCopiedToken] = useState(null);
+  const [resetResult, setResetResult] = useState(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ["admin", "school", schoolId],
@@ -137,6 +140,15 @@ export default function AdminSchoolDetail() {
       toast.success("Invite revoked");
     },
     onError: (err) => toast.error(err.message || "Failed to revoke invite"),
+  });
+
+  const resetPasswordMutation = useMutation({
+    mutationFn: resetAdminUserPassword,
+    onSuccess: (result) => {
+      setResetResult(result);
+      toast.success("Recovery link generated");
+    },
+    onError: (err) => toast.error(err.message || "Failed to generate recovery link"),
   });
 
   const deleteUserMutation = useMutation({
@@ -503,6 +515,16 @@ export default function AdminSchoolDetail() {
                         <Button
                           variant="ghost"
                           size="sm"
+                          onClick={() => resetPasswordMutation.mutate(member.id)}
+                          disabled={isSelf || resetPasswordMutation.isPending}
+                          title="Reset password"
+                          className="text-muted-foreground hover:text-foreground"
+                        >
+                          <KeyRound className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
                           onClick={() => openUnassignModal(member)}
                           disabled={isSelf}
                           title="Remove from school"
@@ -555,6 +577,42 @@ export default function AdminSchoolDetail() {
               {unassignMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
               Remove from school
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Password reset link modal */}
+      <Dialog open={!!resetResult} onOpenChange={(open) => { if (!open) setResetResult(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <KeyRound className="w-5 h-5 text-primary" />
+              Password reset link
+            </DialogTitle>
+            <DialogDescription>
+              Share this link with <strong>{resetResult?.email}</strong>. When they open it, they'll be able to set a new password.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="p-2 rounded bg-secondary border text-xs font-mono break-all">
+              {resetResult?.link}
+            </div>
+            <Button
+              onClick={() => {
+                if (resetResult?.link) {
+                  navigator.clipboard.writeText(resetResult.link);
+                  toast.success("Link copied!");
+                }
+              }}
+              variant="outline"
+              className="w-full gap-2"
+            >
+              <Copy className="w-4 h-4" />
+              Copy link
+            </Button>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setResetResult(null)}>Done</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

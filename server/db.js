@@ -671,6 +671,22 @@ export async function updateUserRole(userId, role) {
   if (error) throw error;
 }
 
+/**
+ * Generate a Supabase password recovery link for the given email.
+ * Returns the link URL which the admin can share with the user.
+ */
+export async function generatePasswordRecoveryLink(email, redirectTo) {
+  const sb = getSupabase();
+  if (!sb) throw new Error("Supabase not available");
+  const { data, error } = await sb.auth.admin.generateLink({
+    type: "recovery",
+    email,
+    options: redirectTo ? { redirectTo } : undefined,
+  });
+  if (error) throw error;
+  return data?.properties?.action_link || null;
+}
+
 export async function deleteUser(userId) {
   const sb = getSupabase();
   if (!sb) throw new Error("Supabase not available");
