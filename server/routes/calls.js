@@ -3,6 +3,7 @@ import { requireUser } from "../middleware/auth.js";
 import {
   getCallsByUser,
   getCallsBySchool,
+  getCallsBySchoolAndUser,
   getCallById,
   getScorecardByCallId,
   updateCall,
@@ -44,6 +45,11 @@ router.get("/", requireUser, async (req, res) => {
       if (!user.schoolId) return res.json([]);
       if (scope === "mine") {
         const calls = await getCallsByUser(user.id);
+        return res.json(calls);
+      }
+      const userIdParam = req.query.userId ? parseInt(req.query.userId, 10) : null;
+      if (userIdParam) {
+        const calls = await getCallsBySchoolAndUser(user.schoolId, userIdParam);
         return res.json(calls);
       }
       const calls = await getCallsBySchool(user.schoolId);

@@ -1,9 +1,17 @@
 import DashboardLayout from "@/components/DashboardLayout";
-import { fetchCalls } from "@/lib/api";
+import { fetchCalls, fetchSchoolMembers } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
+import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Phone,
   ChevronRight,
@@ -11,7 +19,9 @@ import {
   Clock,
   Calendar,
   BarChart3,
+  User,
 } from "lucide-react";
+import { useState } from "react";
 import { useLocation } from "wouter";
 
 function ScenarioBadge({ scenario }) {
@@ -88,7 +98,20 @@ function formatDate(date) {
 
 export default function CallHistory() {
   const [, setLocation] = useLocation();
-  const { data: calls, isLoading } = useQuery({ queryKey: ["calls"], queryFn: fetchCalls });
+  const { isSchoolAdmin, isGlobalAdmin } = useAuth();
+  const showStaffFilter = isSchoolAdmin && !isGlobalAdmin;
+  const [userId, setUserId] = useState("all");
+
+  const { data: calls, isLoading } = useQuery({
+    queryKey: ["calls", userId],
+    queryFn: () => fetchCalls(userId !== "all" ? { userId } : {}),
+  });
+
+  const { data: members } = useQuery({
+    queryKey: ["school", "members"],
+    queryFn: fetchSchoolMembers,
+    enabled: showStaffFilter,
+  });
 
   return (
     <DashboardLayout>
@@ -113,7 +136,24 @@ export default function CallHistory() {
 
         <Card className="bg-card border-border">
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">All Training Sessions</CardTitle>
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <CardTitle className="text-base">All Training Sessions</CardTitle>
+              {showStaffFilter && (
+                <Select value={userId} onValueChange={setUserId}>
+                  <SelectTrigger className="w-50 h-8 text-sm">
+                    <SelectValue placeholder="All Staff" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Staff</SelectItem>
+                    {(members ?? []).map((m) => (
+                      <SelectItem key={m.id} value={String(m.id)}>
+                        {m.name || m.email}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
           </CardHeader>
           <CardContent>
             {isLoading ? (
@@ -149,7 +189,7 @@ export default function CallHistory() {
                           <DifficultyBadge difficulty={call.difficulty} />
                           <StatusBadge status={call.status} />
                         </div>
-                        <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                        <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
                           <span className="flex items-center gap-1">
                             <Calendar className="w-3 h-3" />
                             {formatDate(call.createdAt)}
@@ -158,6 +198,12 @@ export default function CallHistory() {
                             <Clock className="w-3 h-3" />
                             {formatDuration(call.durationSeconds)}
                           </span>
+                          {call.userName && (
+                            <span className="flex items-center gap-1">
+                              <User className="w-3 h-3" />
+                              {call.userName}
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>

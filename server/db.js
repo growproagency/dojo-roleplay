@@ -317,15 +317,21 @@ function attachScore(callRow) {
   } else {
     camel.overallScore = null;
   }
+  const u = callRow.users;
+  const userRow = Array.isArray(u) ? u[0] : u;
+  camel.userName = userRow?.name ?? null;
+  camel.userEmail = userRow?.email ?? null;
   return camel;
 }
+
+const CALLS_SELECT_WITH_USER = "*, scorecards(overall_score), users(name, email)";
 
 export async function getCallsByUser(userId) {
   const sb = getSupabase();
   if (!sb) return [];
   const { data, error } = await sb
     .from("calls")
-    .select("*, scorecards(overall_score)")
+    .select(CALLS_SELECT_WITH_USER)
     .eq("user_id", userId)
     .order("created_at", { ascending: false });
   if (error) { console.error("[Database] getCallsByUser error:", error); return []; }
@@ -337,10 +343,23 @@ export async function getCallsBySchool(schoolId) {
   if (!sb || !schoolId) return [];
   const { data, error } = await sb
     .from("calls")
-    .select("*, scorecards(overall_score)")
+    .select(CALLS_SELECT_WITH_USER)
     .eq("school_id", schoolId)
     .order("created_at", { ascending: false });
   if (error) { console.error("[Database] getCallsBySchool error:", error); return []; }
+  return (data || []).map(attachScore);
+}
+
+export async function getCallsBySchoolAndUser(schoolId, userId) {
+  const sb = getSupabase();
+  if (!sb || !schoolId || !userId) return [];
+  const { data, error } = await sb
+    .from("calls")
+    .select(CALLS_SELECT_WITH_USER)
+    .eq("school_id", schoolId)
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false });
+  if (error) { console.error("[Database] getCallsBySchoolAndUser error:", error); return []; }
   return (data || []).map(attachScore);
 }
 

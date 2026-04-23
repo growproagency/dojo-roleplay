@@ -8,6 +8,9 @@ import { CheckCircle2, Circle, Settings, UserPlus, Phone, BarChart3, Sparkles, X
 import { useState, useEffect } from "react";
 
 const DISMISSED_KEY = "dojo:onboardingDismissed";
+const DISMISSED_DATE_KEY = "dojo:onboardingDismissedDate";
+
+const todayStr = () => new Date().toISOString().slice(0, 10);
 
 export default function OnboardingChecklist() {
   const { isSchoolAdmin, isGlobalAdmin } = useAuth();
@@ -15,6 +18,14 @@ export default function OnboardingChecklist() {
   const [dismissed, setDismissed] = useState(() => {
     return typeof window !== "undefined" && localStorage.getItem(DISMISSED_KEY) === "true";
   });
+  const [dismissedToday, setDismissedToday] = useState(() => {
+    return typeof window !== "undefined" && localStorage.getItem(DISMISSED_DATE_KEY) === todayStr();
+  });
+
+  const handleDismissToday = () => {
+    localStorage.setItem(DISMISSED_DATE_KEY, todayStr());
+    setDismissedToday(true);
+  };
 
   // Only show for school admins (not pure global admins, not staff)
   const shouldRun = isSchoolAdmin && !isGlobalAdmin;
@@ -42,8 +53,6 @@ export default function OnboardingChecklist() {
     queryFn: fetchCalls,
     enabled: shouldRun,
   });
-
-  if (!shouldRun || dismissed) return null;
 
   const schoolInfoDone =
     !!school && (school.name && school.name !== "Our Martial Arts School" && school.name !== "Default School") &&
@@ -94,38 +103,37 @@ export default function OnboardingChecklist() {
   const doneCount = steps.filter(s => s.done).length;
   const allDone = doneCount === steps.length;
 
-  // Auto-dismiss once all done (but let user manually dismiss too)
   useEffect(() => {
-    if (allDone) {
+    if (shouldRun && !dismissed && allDone) {
       const timer = setTimeout(() => {
         localStorage.setItem(DISMISSED_KEY, "true");
         setDismissed(true);
       }, 5000);
       return () => clearTimeout(timer);
     }
-  }, [allDone]);
+  }, [shouldRun, dismissed, allDone]);
 
-  const handleDismiss = () => {
-    localStorage.setItem(DISMISSED_KEY, "true");
-    setDismissed(true);
-  };
+  if (!shouldRun || dismissed || dismissedToday) return null;
 
   return (
-    <Card className="bg-gradient-to-br from-primary/5 via-card to-card border-primary/20 relative">
-      <button
-        onClick={handleDismiss}
-        className="absolute top-3 right-3 p-1 rounded hover:bg-accent transition-colors"
-        title="Dismiss"
-      >
-        <X className="w-4 h-4 text-muted-foreground" />
-      </button>
+    <Card className="bg-gradient-to-br from-primary/5 via-card to-card border-primary/20">
       <CardHeader className="pb-3">
         <CardTitle className="text-base flex items-center gap-2">
           <Sparkles className="w-4 h-4 text-primary" />
           Get started with Dojo Roleplay
-          <span className="text-xs text-muted-foreground font-normal ml-auto mr-6">
+          <span className="text-xs text-muted-foreground font-normal ml-auto">
             {doneCount}/{steps.length} complete
           </span>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleDismissToday}
+            aria-label="Hide for today"
+            title="Hide for today"
+            className="h-6 w-6 -mr-1 text-muted-foreground hover:text-foreground"
+          >
+            <X className="w-4 h-4" />
+          </Button>
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
