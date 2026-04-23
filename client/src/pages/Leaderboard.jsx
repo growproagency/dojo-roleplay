@@ -47,6 +47,23 @@ function formatDate(date) {
   });
 }
 
+function StaffIdentity({ entry, align = "left", size = "sm" }) {
+  const name = entry.userName?.trim();
+  const email = entry.userEmail?.trim();
+  const primary = name || email || "Unknown";
+  const secondary = name && email ? email : null;
+  const alignClass = align === "center" ? "text-center" : "text-left";
+  const primaryClass = size === "lg" ? "font-semibold text-base" : "font-medium text-sm";
+  return (
+    <div className={`min-w-0 ${alignClass}`}>
+      <p className={`${primaryClass} truncate`}>{primary}</p>
+      {secondary && (
+        <p className="text-xs text-muted-foreground truncate">{secondary}</p>
+      )}
+    </div>
+  );
+}
+
 export default function Leaderboard() {
   const [range, setRange] = useState("all");
   const [scenario, setScenario] = useState("all");
@@ -102,7 +119,7 @@ export default function Leaderboard() {
                       <div className="flex justify-center">
                         <RankIcon rank={entry.rank} />
                       </div>
-                      <p className="font-semibold text-base truncate">{entry.userName}</p>
+                      <StaffIdentity entry={entry} align="center" size="lg" />
                       <div className="flex justify-center">
                         <ScoreBadge score={entry.avgScore} />
                       </div>
@@ -196,7 +213,9 @@ export default function Leaderboard() {
                                 <RankIcon rank={entry.rank} />
                               </div>
                             </td>
-                            <td className="px-4 py-3 font-medium">{entry.userName}</td>
+                            <td className="px-4 py-3">
+                              <StaffIdentity entry={entry} />
+                            </td>
                             <td className="px-4 py-3 text-right">
                               <ScoreBadge score={entry.avgScore} />
                             </td>

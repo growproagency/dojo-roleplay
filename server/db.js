@@ -402,7 +402,7 @@ export async function getLeaderboard(schoolId, { scenario, fromDate } = {}) {
   // Fetch calls (optionally scoped to a school, scenario, or date) with user info
   let callsQuery = sb
     .from("calls")
-    .select("id, user_id, school_id, scenario, status, created_at, users!inner(name)");
+    .select("id, user_id, school_id, scenario, status, created_at, users!inner(name, email)");
   if (schoolId != null) callsQuery = callsQuery.eq("school_id", schoolId);
   if (scenario) callsQuery = callsQuery.eq("scenario", scenario);
   if (fromDate) callsQuery = callsQuery.gte("created_at", fromDate);
@@ -426,9 +426,10 @@ export async function getLeaderboard(schoolId, { scenario, fromDate } = {}) {
 
   for (const c of callRows || []) {
     const userId = c.user_id;
-    const userName = c.users?.name || "Unknown";
+    const userName = c.users?.name ?? null;
+    const userEmail = c.users?.email ?? null;
     if (!userMap.has(userId)) {
-      userMap.set(userId, { userName, totalCalls: 0, scoredCalls: 0, scores: [], lastCallAt: c.created_at });
+      userMap.set(userId, { userName, userEmail, totalCalls: 0, scoredCalls: 0, scores: [], lastCallAt: c.created_at });
     }
     const entry = userMap.get(userId);
     entry.totalCalls++;
@@ -449,6 +450,7 @@ export async function getLeaderboard(schoolId, { scenario, fromDate } = {}) {
     return {
       userId,
       userName: entry.userName,
+      userEmail: entry.userEmail,
       totalCalls: entry.totalCalls,
       scoredCalls: entry.scoredCalls,
       avgScore,
