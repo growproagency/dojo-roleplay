@@ -111,9 +111,11 @@ export default function ScenariosOverview() {
                 {scenarios.map((s) => {
                   const details = BUILT_IN_DETAILS[s.id];
                   const contextType = details?.contextType ?? s.contextType;
-                  const character = details?.character
-                    ?? (s.characterName ? s.characterName : null);
-                  const topics = details?.topics ?? [];
+                  const character =
+                    details?.character
+                    ?? (s.characterBlurb?.trim() || s.characterName)
+                    ?? null;
+                  const topics = details?.topics ?? (Array.isArray(s.topics) ? s.topics : []);
                   const ctx = contextType ? CONTEXT_META[contextType] : null;
                   return (
                     <div
