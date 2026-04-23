@@ -1,11 +1,11 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import OnboardingChecklist from "@/components/OnboardingChecklist";
 import DashboardCharts from "@/components/DashboardCharts";
+import ScenariosOverview from "@/components/ScenariosOverview";
 import { fetchCalls } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import {
   Phone,
   BarChart3,
@@ -16,60 +16,51 @@ import {
 } from "lucide-react";
 import { useLocation } from "wouter";
 
-function ScenarioBadge({ scenario }) {
-  const labels = {
-    new_student: "New Student",
-    parent_enrollment: "Parent Enrollment",
-    web_lead_callback: "Outbound Callback",
-    sales_enrollment: "Sales Enrollment",
-    renewal_conference: "Renewal",
-    cancellation_save: "Cancellation Save",
-  };
-  const colors = {
-    new_student: "",
-    parent_enrollment: "",
-    web_lead_callback: "bg-orange-500/10 text-orange-400 border-orange-500/20 border",
-    sales_enrollment: "bg-purple-500/10 text-purple-400 border-purple-500/20 border",
-    renewal_conference: "bg-teal-500/10 text-teal-400 border-teal-500/20 border",
-    cancellation_save: "bg-red-500/10 text-red-400 border-red-500/20 border",
-  };
-  return (
-    <Badge variant="secondary" className={`text-xs ${colors[scenario] ?? ""}`}>
-      {labels[scenario] ?? scenario}
-    </Badge>
-  );
-}
+const SCENARIO_LABELS = {
+  new_student: "New Student",
+  parent_enrollment: "Parent Enrollment",
+  web_lead_callback: "Outbound Callback",
+  sales_enrollment: "Sales Enrollment",
+  renewal_conference: "Renewal",
+  cancellation_save: "Cancellation Save",
+};
 
-function DifficultyBadge({ difficulty }) {
+const DIFFICULTY_DOT = {
+  easy: "bg-green-500",
+  medium: "bg-yellow-500",
+  hard: "bg-red-500",
+};
+
+const DIFFICULTY_LABEL = {
+  easy: "Easy",
+  medium: "Medium",
+  hard: "Hard",
+};
+
+function DifficultyChip({ difficulty }) {
   if (!difficulty) return null;
-  const config = {
-    easy: { label: "Easy", className: "bg-green-500/10 text-green-400 border-green-500/20 border" },
-    medium: { label: "Medium", className: "bg-yellow-500/10 text-yellow-400 border-yellow-500/20 border" },
-    hard: { label: "Hard", className: "bg-red-500/10 text-red-400 border-red-500/20 border" },
-  };
-  const c = config[difficulty] ?? { label: difficulty, className: "bg-muted text-muted-foreground border" };
   return (
-    <Badge variant="secondary" className={`text-xs ${c.className}`}>
-      {c.label}
-    </Badge>
-  );
-}
-
-function StatusBadge({ status }) {
-  const config = {
-    in_progress: { label: "In Progress", className: "bg-yellow-500/10 text-yellow-400 border-yellow-500/20" },
-    completed: { label: "Completed", className: "bg-blue-500/10 text-blue-400 border-blue-500/20" },
-    scoring: { label: "Scoring...", className: "bg-purple-500/10 text-purple-400 border-purple-500/20" },
-    scored: { label: "Scored", className: "bg-green-500/10 text-green-400 border-green-500/20" },
-    failed: { label: "Failed", className: "bg-red-500/10 text-red-400 border-red-500/20" },
-  };
-  const c = config[status] ?? { label: status, className: "bg-muted text-muted-foreground" };
-  return (
-    <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${c.className}`}>
-      {c.label}
+    <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+      <span className={`w-1.5 h-1.5 rounded-full ${DIFFICULTY_DOT[difficulty] ?? "bg-muted-foreground"}`} />
+      {DIFFICULTY_LABEL[difficulty] ?? difficulty}
     </span>
   );
 }
+
+function scoreColor(score) {
+  if (score == null) return "text-muted-foreground";
+  if (score >= 80) return "text-green-500";
+  if (score >= 60) return "text-yellow-500";
+  if (score >= 40) return "text-orange-500";
+  return "text-red-500";
+}
+
+const STATUS_LABELS = {
+  in_progress: "In Progress",
+  completed: "Not scored",
+  scoring: "Scoring…",
+  failed: "Failed",
+};
 
 function formatDuration(seconds) {
   if (!seconds) return "—";
@@ -151,6 +142,8 @@ export default function Dashboard() {
           </Card>
         </div>
 
+        <ScenariosOverview />
+
         <DashboardCharts calls={calls} />
 
         <div>
@@ -192,16 +185,36 @@ export default function Dashboard() {
                             <Phone className="w-3.5 h-3.5 text-primary" />
                           </div>
                           <div className="min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <ScenarioBadge scenario={call.scenario} />
-                              <DifficultyBadge difficulty={call.difficulty} />
-                              <StatusBadge status={call.status} />
+                            <div className="flex items-center gap-3 flex-wrap mb-1">
+                              <span className="text-sm font-medium text-foreground">
+                                {SCENARIO_LABELS[call.scenario] ?? call.scenario}
+                              </span>
+                              <DifficultyChip difficulty={call.difficulty} />
                             </div>
-                            <p className="text-xs text-muted-foreground mt-1">{formatDate(call.createdAt)}</p>
+                            <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
+                              <span>{formatDate(call.createdAt)}</span>
+                              <span className="flex items-center gap-1">
+                                <Clock className="w-3 h-3" />
+                                {formatDuration(call.durationSeconds)}
+                              </span>
+                            </div>
                           </div>
                         </div>
                         <div className="flex items-center gap-3 shrink-0 ml-2">
-                          <span className="text-sm text-muted-foreground">{formatDuration(call.durationSeconds)}</span>
+                          {call.status === "scored" && call.overallScore != null ? (
+                            <div className="text-right">
+                              <div className={`text-lg font-semibold leading-none ${scoreColor(call.overallScore)}`}>
+                                {call.overallScore}
+                              </div>
+                              <div className="text-[10px] text-muted-foreground mt-1 uppercase tracking-wide">
+                                Score
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">
+                              {STATUS_LABELS[call.status] ?? call.status}
+                            </span>
+                          )}
                           <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-foreground transition-colors" />
                         </div>
                       </button>
