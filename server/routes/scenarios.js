@@ -1,9 +1,9 @@
 import { Router } from "express";
 import { z } from "zod/v4";
 import { SCENARIOS, BUILT_IN_SCENARIO_IDS } from "../scenarios.js";
-import { requireGlobalAdmin } from "../middleware/auth.js";
+import { requireUser, requireGlobalAdmin } from "../middleware/auth.js";
 import {
-  getActiveCustomScenarios,
+  getActiveCustomScenariosForUser,
   getAllCustomScenarios,
   getCustomScenarioById,
   createCustomScenario,
@@ -14,7 +14,8 @@ import {
 const router = Router();
 
 // GET /api/scenarios — list all available scenarios (built-in + active custom)
-router.get("/", async (_req, res) => {
+// Scoped by school_id: global admins see all, others see platform-wide plus their own school's.
+router.get("/", requireUser, async (req, res) => {
   try {
     const builtIn = Object.values(SCENARIOS).map(s => ({
       id: s.id,
@@ -23,14 +24,17 @@ router.get("/", async (_req, res) => {
       isBuiltIn: true,
     }));
 
-    const custom = await getActiveCustomScenarios();
+    const custom = await getActiveCustomScenariosForUser(req.user);
     const customList = custom.map(s => ({
       id: s.slug,
       title: s.title,
       description: s.description,
       isBuiltIn: false,
       characterName: s.characterName,
+      characterBlurb: s.characterBlurb,
+      topics: s.topics,
       contextType: s.contextType,
+      schoolId: s.schoolId,
     }));
 
     res.json([...builtIn, ...customList]);
@@ -72,6 +76,9 @@ const scenarioSchema = z.object({
   description: z.string().min(1).max(1000),
   contextType: z.enum(["inbound_call", "outbound_callback", "in_person"]).optional().default("inbound_call"),
   characterName: z.string().min(1).max(100),
+  characterBlurb: z.string().max(255).optional().nullable(),
+  topics: z.array(z.string().min(1).max(40)).max(6).optional().nullable(),
+  schoolId: z.number().int().nullable().optional(),
   characterPrompt: z.string().min(10),
   openingLine: z.string().max(500).optional().nullable(),
   voiceId: z.string().min(1).max(100).optional().default("Elliot"),

@@ -4,6 +4,7 @@ import {
   createCustomScenario,
   updateCustomScenario,
   deleteCustomScenario,
+  fetchAdminSchools,
 } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -37,6 +38,7 @@ import {
   Drama,
   ToggleLeft,
   ToggleRight,
+  X,
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -83,6 +85,9 @@ const DEFAULT_FORM = {
   description: "",
   contextType: "inbound_call",
   characterName: "",
+  characterBlurb: "",
+  topics: [],
+  schoolId: null,
   characterPrompt: PROMPT_TEMPLATE,
   openingLine: "",
   voiceId: "Elliot",
@@ -99,10 +104,33 @@ export default function CustomScenarios() {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [showScoringPrompt, setShowScoringPrompt] = useState(false);
+  const [topicInput, setTopicInput] = useState("");
+
+  const addTopic = () => {
+    const val = topicInput.trim();
+    if (!val) return;
+    if (form.topics.length >= 6) return;
+    if (form.topics.includes(val)) {
+      setTopicInput("");
+      return;
+    }
+    setForm(f => ({ ...f, topics: [...f.topics, val] }));
+    setTopicInput("");
+  };
+
+  const removeTopic = (t) => {
+    setForm(f => ({ ...f, topics: f.topics.filter(x => x !== t) }));
+  };
 
   const { data: scenarios, isLoading } = useQuery({
     queryKey: ["custom-scenarios"],
     queryFn: fetchCustomScenarios,
+    enabled: isGlobalAdmin,
+  });
+
+  const { data: schools } = useQuery({
+    queryKey: ["admin-schools"],
+    queryFn: fetchAdminSchools,
     enabled: isGlobalAdmin,
   });
 
@@ -148,6 +176,7 @@ export default function CustomScenarios() {
   const openCreateForm = () => {
     setForm(DEFAULT_FORM);
     setShowScoringPrompt(false);
+    setTopicInput("");
     setEditingScenario({});
   };
 
@@ -157,6 +186,9 @@ export default function CustomScenarios() {
       description: scenario.description,
       contextType: scenario.contextType,
       characterName: scenario.characterName,
+      characterBlurb: scenario.characterBlurb || "",
+      topics: Array.isArray(scenario.topics) ? scenario.topics : [],
+      schoolId: scenario.schoolId ?? null,
       characterPrompt: scenario.characterPrompt,
       openingLine: scenario.openingLine || "",
       voiceId: scenario.voiceId,
@@ -165,6 +197,7 @@ export default function CustomScenarios() {
       isActive: scenario.isActive,
     });
     setShowScoringPrompt(!!scenario.scoringPrompt);
+    setTopicInput("");
     setEditingScenario(scenario);
   };
 
@@ -172,6 +205,9 @@ export default function CustomScenarios() {
     e.preventDefault();
     const data = {
       ...form,
+      characterBlurb: form.characterBlurb?.trim() || null,
+      topics: form.topics.length > 0 ? form.topics : null,
+      schoolId: form.schoolId ?? null,
       openingLine: form.openingLine || null,
       scoringPrompt: form.scoringPrompt || null,
     };
@@ -333,6 +369,20 @@ export default function CustomScenarios() {
             </div>
 
             <div className="space-y-1.5">
+              <Label htmlFor="characterBlurb">Character blurb</Label>
+              <Input
+                id="characterBlurb"
+                value={form.characterBlurb}
+                onChange={(e) => setForm(f => ({ ...f, characterBlurb: e.target.value }))}
+                placeholder="e.g. Jordan — adult prospect who found you online"
+                maxLength={255}
+              />
+              <p className="text-xs text-muted-foreground">
+                Short one-liner shown beneath the character's name on the Dashboard card. Leave blank to just show the name.
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
               <Label htmlFor="description">Description *</Label>
               <Textarea
                 id="description"
@@ -342,6 +392,57 @@ export default function CustomScenarios() {
                 rows={2}
                 required
               />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="topicInput">Topics that come up</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="topicInput"
+                  value={topicInput}
+                  onChange={(e) => setTopicInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === ",") {
+                      e.preventDefault();
+                      addTopic();
+                    }
+                  }}
+                  placeholder="e.g. Pricing, Schedule, Commitment"
+                  maxLength={40}
+                  disabled={form.topics.length >= 6}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={addTopic}
+                  disabled={!topicInput.trim() || form.topics.length >= 6}
+                >
+                  Add
+                </Button>
+              </div>
+              {form.topics.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 pt-1">
+                  {form.topics.map((t) => (
+                    <span
+                      key={t}
+                      className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-secondary border border-border"
+                    >
+                      {t}
+                      <button
+                        type="button"
+                        onClick={() => removeTopic(t)}
+                        className="text-muted-foreground hover:text-foreground"
+                        aria-label={`Remove ${t}`}
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Up to 6 short tags. Press Enter or comma to add.
+              </p>
             </div>
 
             <div className="grid sm:grid-cols-2 gap-4">
@@ -367,6 +468,27 @@ export default function CustomScenarios() {
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="schoolScope">Visible to</Label>
+              <Select
+                value={form.schoolId == null ? "all" : String(form.schoolId)}
+                onValueChange={(val) =>
+                  setForm(f => ({ ...f, schoolId: val === "all" ? null : parseInt(val, 10) }))
+                }
+              >
+                <SelectTrigger id="schoolScope"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All schools (platform-wide)</SelectItem>
+                  {(schools ?? []).map((s) => (
+                    <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Choose a specific school to restrict this scenario to them. "All schools" makes it visible to everyone.
+              </p>
             </div>
 
             <div className="space-y-1.5">

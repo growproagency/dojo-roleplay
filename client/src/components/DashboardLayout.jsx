@@ -28,6 +28,7 @@ import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 import { Button } from "./ui/button";
 import CallWidget from "./CallWidget";
+import NameRequiredDialog from "./NameRequiredDialog";
 
 // `requires` controls visibility:
 //   undefined         → visible to all authenticated users
@@ -342,6 +343,7 @@ function DashboardLayoutContent({
         <main className="flex-1 p-4">{children}</main>
       </SidebarInset>
       <CallWidget />
+      <NameRequiredDialog />
     </>
   );
 }

@@ -97,6 +97,9 @@ function toCustomScenarioCamel(row) {
     description: row.description,
     contextType: row.context_type,
     characterName: row.character_name,
+    characterBlurb: row.character_blurb ?? null,
+    topics: row.topics ?? null,
+    schoolId: row.school_id ?? null,
     characterPrompt: row.character_prompt,
     openingLine: row.opening_line,
     voiceId: row.voice_id,
@@ -922,6 +925,28 @@ export async function getActiveCustomScenarios() {
   return (data || []).map(toCustomScenarioCamel);
 }
 
+// Scoped list for a logged-in user: global admins see everything, others see
+// platform-wide (school_id IS NULL) plus their own school's scenarios.
+export async function getActiveCustomScenariosForUser(user) {
+  const sb = getSupabase();
+  if (!sb) return [];
+  const isGlobal = user?.role === "global_admin" || user?.role === "admin";
+  if (isGlobal) return getActiveCustomScenarios();
+  let query = sb
+    .from("custom_scenarios")
+    .select("*")
+    .eq("is_active", true)
+    .order("created_at", { ascending: true });
+  if (user?.schoolId != null) {
+    query = query.or(`school_id.is.null,school_id.eq.${user.schoolId}`);
+  } else {
+    query = query.is("school_id", null);
+  }
+  const { data, error } = await query;
+  if (error) { console.error("[Database] getActiveCustomScenariosForUser error:", error); return []; }
+  return (data || []).map(toCustomScenarioCamel);
+}
+
 export async function getAllCustomScenarios() {
   const sb = getSupabase();
   if (!sb) return [];
@@ -958,6 +983,9 @@ export async function createCustomScenario(data) {
     description: data.description,
     context_type: data.contextType || "inbound_call",
     character_name: data.characterName,
+    character_blurb: data.characterBlurb ?? null,
+    topics: data.topics ?? null,
+    school_id: data.schoolId ?? null,
     character_prompt: data.characterPrompt,
     opening_line: data.openingLine || null,
     voice_id: data.voiceId || "Elliot",
@@ -984,6 +1012,9 @@ export async function updateCustomScenario(id, data) {
     description: "description",
     contextType: "context_type",
     characterName: "character_name",
+    characterBlurb: "character_blurb",
+    topics: "topics",
+    schoolId: "school_id",
     characterPrompt: "character_prompt",
     openingLine: "opening_line",
     voiceId: "voice_id",
