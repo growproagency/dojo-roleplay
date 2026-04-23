@@ -117,12 +117,20 @@ export default function ScenariosOverview() {
                     ?? null;
                   const topics = details?.topics ?? (Array.isArray(s.topics) ? s.topics : []);
                   const ctx = contextType ? CONTEXT_META[contextType] : null;
+                  const isCustom = s.isBuiltIn === false;
                   return (
                     <div
                       key={s.id}
                       className="p-3 rounded-lg border border-border bg-secondary/30 space-y-2"
                     >
-                      <p className="text-sm font-medium text-foreground">{s.title}</p>
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-sm font-medium text-foreground">{s.title}</p>
+                        {isCustom && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-violet-500/10 text-violet-600 dark:text-violet-400 shrink-0">
+                            Custom
+                          </span>
+                        )}
+                      </div>
                       {(ctx || character) && (
                         <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
                           {ctx && (
