@@ -39,7 +39,12 @@ export const fetchMe = () => apiFetch("/auth/me");
 export const updateMe = (data) => apiFetch("/auth/me", { method: "PUT", body: JSON.stringify(data) });
 export const apiLogout = () => apiFetch("/auth/logout", { method: "POST" });
 export const fetchScenarios = () => apiFetch("/scenarios");
-export const fetchCalls = () => apiFetch("/calls");
+export const fetchCalls = (params = {}) => {
+  const qs = new URLSearchParams();
+  if (params.userId) qs.set("userId", params.userId);
+  const query = qs.toString();
+  return apiFetch(`/calls${query ? `?${query}` : ""}`);
+};
 export const fetchCall = (id) => apiFetch(`/calls/${id}`);
 export const triggerScoring = (callId) => apiFetch(`/calls/${callId}/score`, { method: "POST" });
 export const fetchSettings = () => apiFetch("/settings");
