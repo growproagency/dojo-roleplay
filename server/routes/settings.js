@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { z } from "zod/v4";
-import { requireUser, requireSchoolAdmin } from "../middleware/auth.js";
+import { requireUser, requireSchoolAdmin, effectiveSchoolId } from "../middleware/auth.js";
 import { getSchoolSettings, upsertSchoolSettings } from "../db.js";
 
 const router = Router();
@@ -21,8 +21,9 @@ const settingsSchema = z.object({
 // GET /api/settings — get school settings (any school member can read)
 router.get("/", requireUser, async (req, res) => {
   try {
-    if (!req.user.schoolId) return res.json(null);
-    const s = await getSchoolSettings(req.user.schoolId);
+    const schoolId = effectiveSchoolId(req);
+    if (!schoolId) return res.json(null);
+    const s = await getSchoolSettings(schoolId);
     res.json(s ?? null);
   } catch (err) {
     console.error("[Settings] get error:", err);
@@ -33,8 +34,9 @@ router.get("/", requireUser, async (req, res) => {
 // PUT /api/settings — save school settings (school_admin or global_admin only)
 router.put("/", requireSchoolAdmin, async (req, res) => {
   try {
-    if (!req.user.schoolId) {
-      return res.status(400).json({ message: "You are not assigned to a school" });
+    const schoolId = effectiveSchoolId(req);
+    if (!schoolId) {
+      return res.status(400).json({ message: "No school selected" });
     }
 
     const parsed = settingsSchema.safeParse(req.body);
@@ -44,7 +46,7 @@ router.put("/", requireSchoolAdmin, async (req, res) => {
 
     const input = parsed.data;
     await upsertSchoolSettings({
-      schoolId: req.user.schoolId,
+      schoolId,
       schoolName: input.schoolName,
       streetAddress: input.streetAddress ?? null,
       city: input.city ?? null,

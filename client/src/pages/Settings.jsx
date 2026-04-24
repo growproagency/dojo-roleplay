@@ -1,5 +1,8 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import { fetchSettings, saveSettings as saveSettingsApi } from "@/lib/api";
+import { useAuth } from "@/hooks/useAuth";
+import { useViewingSchool } from "@/contexts/ViewingSchoolContext";
+import PickSchoolEmptyState from "@/components/PickSchoolEmptyState";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -25,10 +28,27 @@ const DEFAULT_FORM = {
 };
 
 export default function Settings() {
-  const { data: settings, isLoading } = useQuery({ queryKey: ["settings"], queryFn: fetchSettings });
+  const { isGlobalAdmin } = useAuth();
+  const { viewingSchoolId } = useViewingSchool();
+  const needsSchool = isGlobalAdmin && viewingSchoolId == null;
+  const { data: settings, isLoading } = useQuery({
+    queryKey: ["settings", viewingSchoolId ?? "self"],
+    queryFn: fetchSettings,
+    enabled: !needsSchool,
+  });
   const queryClient = useQueryClient();
   const [form, setForm] = useState(DEFAULT_FORM);
   const [saved, setSaved] = useState(false);
+
+  if (needsSchool) {
+    return (
+      <DashboardLayout>
+        <div className="max-w-3xl mx-auto py-12">
+          <PickSchoolEmptyState message="Pick a school from the sidebar to edit its settings." />
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   // Populate form when settings load
   useEffect(() => {
@@ -51,7 +71,7 @@ export default function Settings() {
   const saveMutation = useMutation({
     mutationFn: (data) => saveSettingsApi(data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["settings"] });
+      queryClient.invalidateQueries({ queryKey: ["settings", viewingSchoolId ?? "self"] });
       setSaved(true);
       toast.success("Settings saved! The AI will use these details on your next call.");
       setTimeout(() => setSaved(false), 3000);

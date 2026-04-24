@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { fetchVapiConfig, fetchScenarios, fetchVapiSessionToken } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
+import { useViewingSchool } from "@/contexts/ViewingSchoolContext";
 import { Button } from "@/components/ui/button";
 import {
   Phone,
@@ -19,6 +20,8 @@ import Vapi from "@vapi-ai/web";
 
 export default function CallWidget() {
   const { user, isGlobalAdmin } = useAuth();
+  const { viewingSchoolId } = useViewingSchool();
+  const needsSchool = isGlobalAdmin && viewingSchoolId == null;
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [webCallActive, setWebCallActive] = useState(false);
@@ -213,9 +216,10 @@ export default function CallWidget() {
                     </div>
                     <Button
                       onClick={startWebCall}
-                      disabled={webCallConnecting}
+                      disabled={webCallConnecting || needsSchool}
                       className="w-full gap-2"
                       size="lg"
+                      title={needsSchool ? "Pick a school to start a practice call." : undefined}
                     >
                       {webCallConnecting ? (
                         <Loader2 className="w-4 h-4 animate-spin" />
@@ -224,6 +228,11 @@ export default function CallWidget() {
                       )}
                       {webCallConnecting ? "Connecting..." : "Start web call"}
                     </Button>
+                    {needsSchool && (
+                      <p className="text-xs text-muted-foreground">
+                        Pick a school in the sidebar before starting a practice call.
+                      </p>
+                    )}
                   </div>
                 )}
 

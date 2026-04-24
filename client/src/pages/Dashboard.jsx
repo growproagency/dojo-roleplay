@@ -2,6 +2,9 @@ import DashboardLayout from "@/components/DashboardLayout";
 import OnboardingChecklist from "@/components/OnboardingChecklist";
 import DashboardCharts from "@/components/DashboardCharts";
 import ScenariosOverview from "@/components/ScenariosOverview";
+import PickSchoolEmptyState from "@/components/PickSchoolEmptyState";
+import { useAuth } from "@/hooks/useAuth";
+import { useViewingSchool } from "@/contexts/ViewingSchoolContext";
 import { fetchCalls } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -77,8 +80,15 @@ function formatDate(date) {
 
 export default function Dashboard() {
   const [, setLocation] = useLocation();
+  const { isGlobalAdmin } = useAuth();
+  const { viewingSchoolId } = useViewingSchool();
+  const needsSchool = isGlobalAdmin && viewingSchoolId == null;
 
-  const { data: calls, isLoading: callsLoading } = useQuery({ queryKey: ["calls"], queryFn: fetchCalls });
+  const { data: calls, isLoading: callsLoading } = useQuery({
+    queryKey: ["calls", viewingSchoolId ?? "self"],
+    queryFn: fetchCalls,
+    enabled: !needsSchool,
+  });
 
   const recentCalls = calls?.slice(0, 5) ?? [];
   const totalCalls = calls?.length ?? 0;
@@ -96,6 +106,10 @@ export default function Dashboard() {
           <p className="text-muted-foreground mt-1">Practice enrollment calls and review your performance.</p>
         </div>
 
+        {needsSchool ? (
+          <PickSchoolEmptyState message="Pick a school to see its training dashboard." />
+        ) : (
+          <>
         <OnboardingChecklist />
 
         {/* Stats row */}
@@ -225,6 +239,8 @@ export default function Dashboard() {
             </Card>
           </div>
         </div>
+          </>
+        )}
       </div>
     </DashboardLayout>
   );

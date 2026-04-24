@@ -8,6 +8,8 @@ import {
   resetSchoolMemberPassword,
 } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
+import { useViewingSchool } from "@/contexts/ViewingSchoolContext";
+import PickSchoolEmptyState from "@/components/PickSchoolEmptyState";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -65,7 +67,9 @@ function formatDate(date) {
 }
 
 export default function Members() {
-  const { user: currentUser, isSchoolAdmin } = useAuth();
+  const { user: currentUser, isSchoolAdmin, isGlobalAdmin } = useAuth();
+  const { viewingSchoolId } = useViewingSchool();
+  const needsSchool = isGlobalAdmin && viewingSchoolId == null;
   const queryClient = useQueryClient();
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState("staff");
@@ -76,15 +80,15 @@ export default function Members() {
   const [resetResult, setResetResult] = useState(null); // { email, link }
 
   const { data: members, isLoading: membersLoading } = useQuery({
-    queryKey: ["school", "members"],
+    queryKey: ["school", "members", viewingSchoolId ?? "self"],
     queryFn: fetchSchoolMembers,
-    enabled: isSchoolAdmin,
+    enabled: isSchoolAdmin && !needsSchool,
   });
 
   const { data: invites, isLoading: invitesLoading } = useQuery({
-    queryKey: ["school", "invites"],
+    queryKey: ["school", "invites", viewingSchoolId ?? "self"],
     queryFn: fetchSchoolInvites,
-    enabled: isSchoolAdmin,
+    enabled: isSchoolAdmin && !needsSchool,
   });
 
   const createInviteMutation = useMutation({
@@ -171,6 +175,16 @@ export default function Members() {
               </div>
             </CardContent>
           </Card>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  if (needsSchool) {
+    return (
+      <DashboardLayout>
+        <div className="max-w-3xl mx-auto py-12">
+          <PickSchoolEmptyState message="Pick a school from the sidebar to manage its members." />
         </div>
       </DashboardLayout>
     );

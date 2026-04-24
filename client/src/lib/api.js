@@ -12,12 +12,20 @@ async function getAuthHeaders() {
   return {};
 }
 
+function getViewingSchoolHeader() {
+  if (typeof window === "undefined") return {};
+  const raw = window.localStorage.getItem("dojo:viewingSchoolId");
+  if (!raw) return {};
+  return { "X-Viewing-School-Id": raw };
+}
+
 export async function apiFetch(path, options = {}) {
   const authHeaders = await getAuthHeaders();
   const res = await fetch(`${API_BASE}${path}`, {
     headers: {
       "Content-Type": "application/json",
       ...authHeaders,
+      ...getViewingSchoolHeader(),
       ...(options.headers || {}),
     },
     ...options,
@@ -53,7 +61,6 @@ export const fetchLeaderboard = (params = {}) => {
   const qs = new URLSearchParams();
   if (params.scenario) qs.set("scenario", params.scenario);
   if (params.range) qs.set("range", params.range);
-  if (params.schoolId) qs.set("schoolId", params.schoolId);
   const query = qs.toString();
   return apiFetch(`/leaderboard${query ? `?${query}` : ""}`);
 };

@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { z } from "zod/v4";
-import { requireUser, requireSchoolAdmin } from "../middleware/auth.js";
+import { requireUser, requireSchoolAdmin, effectiveSchoolId } from "../middleware/auth.js";
 import {
   getSchoolById,
   updateSchool,
@@ -27,8 +27,9 @@ router.use(requireUser);
 // GET /api/school — current user's school
 router.get("/", async (req, res) => {
   try {
-    if (!req.user.schoolId) return res.json(null);
-    const school = await getSchoolById(req.user.schoolId);
+    const schoolId = effectiveSchoolId(req);
+    if (!schoolId) return res.json(null);
+    const school = await getSchoolById(schoolId);
     res.json(school ?? null);
   } catch (err) {
     console.error("[School] get error:", err);
@@ -43,13 +44,14 @@ const updateSchoolSchema = z.object({
 
 router.put("/", requireSchoolAdmin, async (req, res) => {
   try {
-    if (!req.user.schoolId) return res.status(400).json({ message: "You are not assigned to a school" });
+    const schoolId = effectiveSchoolId(req);
+    if (!schoolId) return res.status(400).json({ message: "No school selected" });
     const parsed = updateSchoolSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ message: "Invalid school data", errors: parsed.error.issues });
     }
-    await updateSchool(req.user.schoolId, parsed.data);
-    const school = await getSchoolById(req.user.schoolId);
+    await updateSchool(schoolId, parsed.data);
+    const school = await getSchoolById(schoolId);
     res.json(school);
   } catch (err) {
     console.error("[School] update error:", err);
@@ -60,8 +62,9 @@ router.put("/", requireSchoolAdmin, async (req, res) => {
 // ---- Members ----
 router.get("/members", requireSchoolAdmin, async (req, res) => {
   try {
-    if (!req.user.schoolId) return res.json([]);
-    const members = await getUsersBySchool(req.user.schoolId);
+    const schoolId = effectiveSchoolId(req);
+    if (!schoolId) return res.json([]);
+    const members = await getUsersBySchool(schoolId);
     res.json(members);
   } catch (err) {
     console.error("[School] members error:", err);
@@ -80,7 +83,9 @@ router.delete("/members/:userId", requireSchoolAdmin, async (req, res) => {
     }
 
     // Validate the target user belongs to the same school
-    const members = await getUsersBySchool(req.user.schoolId);
+    const schoolId = effectiveSchoolId(req);
+    if (!schoolId) return res.status(400).json({ message: "No school selected" });
+    const members = await getUsersBySchool(schoolId);
     const target = members.find(m => m.id === userId);
     if (!target) return res.status(404).json({ message: "Member not found in your school" });
 
@@ -100,7 +105,9 @@ router.post("/members/:userId/reset-password", requireSchoolAdmin, async (req, r
     if (isNaN(userId)) return res.status(400).json({ message: "Invalid user id" });
 
     // Verify the target user belongs to the school admin's school
-    const members = await getUsersBySchool(req.user.schoolId);
+    const schoolId = effectiveSchoolId(req);
+    if (!schoolId) return res.status(400).json({ message: "No school selected" });
+    const members = await getUsersBySchool(schoolId);
     const target = members.find(m => m.id === userId);
     if (!target) return res.status(404).json({ message: "Member not found in your school" });
 
@@ -125,8 +132,9 @@ const createInviteSchema = z.object({
 
 router.get("/invites", requireSchoolAdmin, async (req, res) => {
   try {
-    if (!req.user.schoolId) return res.json([]);
-    const invites = await getPendingInvitesForSchool(req.user.schoolId);
+    const schoolId = effectiveSchoolId(req);
+    if (!schoolId) return res.json([]);
+    const invites = await getPendingInvitesForSchool(schoolId);
     res.json(invites);
   } catch (err) {
     console.error("[School] invites list error:", err);
@@ -136,14 +144,15 @@ router.get("/invites", requireSchoolAdmin, async (req, res) => {
 
 router.post("/invites", requireSchoolAdmin, async (req, res) => {
   try {
-    if (!req.user.schoolId) return res.status(400).json({ message: "You are not assigned to a school" });
+    const schoolId = effectiveSchoolId(req);
+    if (!schoolId) return res.status(400).json({ message: "No school selected" });
     const parsed = createInviteSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ message: "Invalid invite data", errors: parsed.error.issues });
     }
 
     const invite = await createInvite({
-      schoolId: req.user.schoolId,
+      schoolId,
       email: parsed.data.email,
       role: parsed.data.role,
       invitedBy: req.user.id,
@@ -172,7 +181,9 @@ router.delete("/invites/:id", requireSchoolAdmin, async (req, res) => {
     if (isNaN(inviteId)) return res.status(400).json({ message: "Invalid invite id" });
 
     // Verify the invite belongs to this school
-    const invites = await getPendingInvitesForSchool(req.user.schoolId);
+    const schoolId = effectiveSchoolId(req);
+    if (!schoolId) return res.status(400).json({ message: "No school selected" });
+    const invites = await getPendingInvitesForSchool(schoolId);
     const target = invites.find(i => i.id === inviteId);
     if (!target) return res.status(404).json({ message: "Invite not found" });
 
@@ -187,13 +198,14 @@ router.delete("/invites/:id", requireSchoolAdmin, async (req, res) => {
 // ---- Usage (school-scoped) ----
 router.get("/usage", requireSchoolAdmin, async (req, res) => {
   try {
-    if (!req.user.schoolId) return res.json({ summary: null, byUser: [] });
+    const schoolId = effectiveSchoolId(req);
+    if (!schoolId) return res.json({ summary: null, byUser: [] });
     const fromDate = typeof req.query.fromDate === "string" ? new Date(req.query.fromDate) : undefined;
     const toDate = typeof req.query.toDate === "string" ? new Date(req.query.toDate) : undefined;
 
     const [summary, byUser] = await Promise.all([
-      getUsageSummary(fromDate, toDate, req.user.schoolId),
-      getUsageByUser(fromDate, toDate, req.user.schoolId),
+      getUsageSummary(fromDate, toDate, schoolId),
+      getUsageByUser(fromDate, toDate, schoolId),
     ]);
 
     res.json({ summary, byUser });
@@ -206,8 +218,9 @@ router.get("/usage", requireSchoolAdmin, async (req, res) => {
 // ---- All school calls (for school_admin call history) ----
 router.get("/calls", requireSchoolAdmin, async (req, res) => {
   try {
-    if (!req.user.schoolId) return res.json([]);
-    const calls = await getCallsBySchool(req.user.schoolId);
+    const schoolId = effectiveSchoolId(req);
+    if (!schoolId) return res.json([]);
+    const calls = await getCallsBySchool(schoolId);
     res.json(calls);
   } catch (err) {
     console.error("[School] calls error:", err);

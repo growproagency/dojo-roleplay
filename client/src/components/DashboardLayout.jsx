@@ -29,6 +29,8 @@ import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 import { Button } from "./ui/button";
 import CallWidget from "./CallWidget";
 import NameRequiredDialog from "./NameRequiredDialog";
+import SchoolSwitcher from "./SchoolSwitcher";
+import { ViewingSchoolProvider } from "@/contexts/ViewingSchoolContext";
 
 // `requires` controls visibility:
 //   undefined         → visible to all authenticated users
@@ -122,15 +124,17 @@ export default function DashboardLayout({
   }
 
   return (
-    <SidebarProvider
-      style={{
-          "--sidebar-width": `${sidebarWidth}px`,
-        }}
-    >
-      <DashboardLayoutContent setSidebarWidth={setSidebarWidth}>
-        {children}
-      </DashboardLayoutContent>
-    </SidebarProvider>
+    <ViewingSchoolProvider>
+      <SidebarProvider
+        style={{
+            "--sidebar-width": `${sidebarWidth}px`,
+          }}
+      >
+        <DashboardLayoutContent setSidebarWidth={setSidebarWidth}>
+          {children}
+        </DashboardLayoutContent>
+      </SidebarProvider>
+    </ViewingSchoolProvider>
   );
 }
 
@@ -223,14 +227,18 @@ function DashboardLayoutContent({
                 <PanelLeft className="h-4 w-4 text-muted-foreground" />
               </button>
               {!isCollapsed ? (
-                <div className="flex flex-col min-w-0 leading-tight">
-                  <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
-                    Dojo Roleplay
-                  </span>
-                  <span className="text-sm font-semibold tracking-tight truncate">
-                    {school?.name || (isGlobalAdmin ? "Global Admin" : "Navigation")}
-                  </span>
-                </div>
+                isGlobalAdmin ? (
+                  <SchoolSwitcher />
+                ) : (
+                  <div className="flex flex-col min-w-0 leading-tight">
+                    <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
+                      Dojo Roleplay
+                    </span>
+                    <span className="text-sm font-semibold tracking-tight truncate">
+                      {school?.name || "Navigation"}
+                    </span>
+                  </div>
+                )
               ) : null}
             </div>
           </SidebarHeader>

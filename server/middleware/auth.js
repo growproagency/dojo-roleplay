@@ -50,11 +50,32 @@ export async function softAuth(req, _res, next) {
     }
 
     req.user = user || null;
+
+    // Global admins may pass X-Viewing-School-Id to scope their requests to a
+    // specific school (school switcher in the sidebar). Other roles are ignored
+    // — they can never cross tenant boundaries via this header.
+    if (isGlobalAdmin(req.user)) {
+      const raw = req.header("x-viewing-school-id");
+      const parsed = raw ? parseInt(raw, 10) : NaN;
+      req.viewingSchoolId = Number.isFinite(parsed) ? parsed : null;
+    } else {
+      req.viewingSchoolId = null;
+    }
   } catch (err) {
     console.error("[Auth] Error authenticating request:", err);
   }
 
   next();
+}
+
+/**
+ * Returns the school the current request should operate in.
+ * - For global admins: req.viewingSchoolId (from the X-Viewing-School-Id header)
+ * - For everyone else: their own schoolId
+ * Returns null if no school context is available.
+ */
+export function effectiveSchoolId(req) {
+  return req.viewingSchoolId ?? req.user?.schoolId ?? null;
 }
 
 /**

@@ -1,6 +1,7 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import { fetchLeaderboard, fetchScenarios, fetchAdminSchools } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
+import { useViewingSchool } from "@/contexts/ViewingSchoolContext";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -67,9 +68,9 @@ function StaffIdentity({ entry, align = "left", size = "sm" }) {
 
 export default function Leaderboard() {
   const { isGlobalAdmin } = useAuth();
+  const { viewingSchoolId } = useViewingSchool();
   const [range, setRange] = useState("all");
   const [scenario, setScenario] = useState("all");
-  const [schoolId, setSchoolId] = useState("all");
 
   const { data: scenarios } = useQuery({
     queryKey: ["scenarios"],
@@ -83,16 +84,17 @@ export default function Leaderboard() {
   });
 
   const schoolNameById = new Map((schools ?? []).map((s) => [s.id, s.name]));
-  const showSchoolColumn = isGlobalAdmin && schoolId === "all";
+  // Show the School column only when the global admin is in platform view
+  // (no specific school picked via the sidebar switcher).
+  const showSchoolColumn = isGlobalAdmin && viewingSchoolId == null;
 
   const filters = {
     ...(range !== "all" && { range }),
     ...(scenario !== "all" && { scenario }),
-    ...(schoolId !== "all" && { schoolId }),
   };
 
   const { data, isLoading } = useQuery({
-    queryKey: ["leaderboard", range, scenario, schoolId],
+    queryKey: ["leaderboard", range, scenario, viewingSchoolId ?? "all"],
     queryFn: () => fetchLeaderboard(filters),
   });
 
@@ -196,19 +198,6 @@ export default function Leaderboard() {
                       ))}
                     </SelectContent>
                   </Select>
-                  {isGlobalAdmin && (
-                    <Select value={schoolId} onValueChange={setSchoolId}>
-                      <SelectTrigger className="w-full sm:w-52">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All schools</SelectItem>
-                        {(schools ?? []).map((s) => (
-                          <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
                 </div>
 
                 {!data || data.length === 0 ? (
