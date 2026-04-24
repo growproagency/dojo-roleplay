@@ -2,6 +2,8 @@ import DashboardLayout from "@/components/DashboardLayout";
 import { fetchCalls, fetchSchoolMembers } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
+import { useViewingSchool } from "@/contexts/ViewingSchoolContext";
+import PickSchoolEmptyState from "@/components/PickSchoolEmptyState";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -95,16 +97,19 @@ function formatDate(date) {
 export default function CallHistory() {
   const [, setLocation] = useLocation();
   const { isSchoolAdmin, isGlobalAdmin } = useAuth();
+  const { viewingSchoolId } = useViewingSchool();
+  const needsSchool = isGlobalAdmin && viewingSchoolId == null;
   const showStaffFilter = isSchoolAdmin && !isGlobalAdmin;
   const [userId, setUserId] = useState("all");
 
   const { data: calls, isLoading } = useQuery({
-    queryKey: ["calls", userId],
+    queryKey: ["calls", userId, viewingSchoolId ?? "self"],
     queryFn: () => fetchCalls(userId !== "all" ? { userId } : {}),
+    enabled: !needsSchool,
   });
 
   const { data: members } = useQuery({
-    queryKey: ["school", "members"],
+    queryKey: ["school", "members", viewingSchoolId ?? "self"],
     queryFn: fetchSchoolMembers,
     enabled: showStaffFilter,
   });
@@ -130,6 +135,9 @@ export default function CallHistory() {
           </Button>
         </div>
 
+        {needsSchool ? (
+          <PickSchoolEmptyState message="Pick a school to view its call history." />
+        ) : (
         <Card className="bg-card border-border">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -225,6 +233,7 @@ export default function CallHistory() {
             )}
           </CardContent>
         </Card>
+        )}
       </div>
     </DashboardLayout>
   );

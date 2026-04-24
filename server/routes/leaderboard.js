@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { requireUser } from "../middleware/auth.js";
+import { requireUser, effectiveSchoolId } from "../middleware/auth.js";
 import { getLeaderboard } from "../db.js";
 
 const router = Router();
@@ -9,19 +9,15 @@ function isGlobalAdmin(user) {
 }
 
 // GET /api/leaderboard — get staff rankings
-//   Default: scoped to the requester's school
-//   Global admin: optional ?schoolId=N for any school, or omit for platform-wide
+//   Staff/school admin: scoped to their own school (schoolId required)
+//   Global admin: scoped to the school they're currently "viewing"
+//                 (X-Viewing-School-Id header). No viewing school → platform-wide.
 router.get("/", requireUser, async (req, res) => {
   try {
     const user = req.user;
-    let schoolId = null;
+    const schoolId = effectiveSchoolId(req);
 
-    if (isGlobalAdmin(user)) {
-      schoolId = req.query.schoolId ? parseInt(req.query.schoolId, 10) : null;
-    } else {
-      if (!user.schoolId) return res.json([]);
-      schoolId = user.schoolId;
-    }
+    if (!isGlobalAdmin(user) && !schoolId) return res.json([]);
 
     const scenario = typeof req.query.scenario === "string" && req.query.scenario ? req.query.scenario : undefined;
     const range = req.query.range; // "7d" | "30d" | "90d" | "all"

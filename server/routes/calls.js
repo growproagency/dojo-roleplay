@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { requireUser } from "../middleware/auth.js";
+import { requireUser, effectiveSchoolId } from "../middleware/auth.js";
 import {
   getCallsByUser,
   getCallsBySchool,
@@ -23,36 +23,38 @@ function isSchoolAdmin(user) {
 
 // GET /api/calls — list calls
 //   Staff:        own calls only
-//   School admin: ?scope=mine|school (default school)
-//   Global admin: optional ?schoolId=N to view a specific school, otherwise platform-wide
+//   School admin: ?scope=mine|school (default school) — always scoped to their schoolId
+//   Global admin: scoped to the school they're currently "viewing" (X-Viewing-School-Id header).
+//                 With no school selected, returns [] (they should use a per-page filter instead).
 router.get("/", requireUser, async (req, res) => {
   try {
     const user = req.user;
     const scope = req.query.scope === "mine" ? "mine" : "school";
+    const schoolId = effectiveSchoolId(req);
 
     if (isGlobalAdmin(user)) {
-      const schoolIdParam = req.query.schoolId ? parseInt(req.query.schoolId, 10) : null;
-      if (schoolIdParam) {
-        const calls = await getCallsBySchool(schoolIdParam);
+      if (!schoolId) return res.json([]);
+      const userIdParam = req.query.userId ? parseInt(req.query.userId, 10) : null;
+      if (userIdParam) {
+        const calls = await getCallsBySchoolAndUser(schoolId, userIdParam);
         return res.json(calls);
       }
-      // No school specified — return user's own calls (global admins can use ?schoolId= for cross-school)
-      const calls = await getCallsByUser(user.id);
+      const calls = await getCallsBySchool(schoolId);
       return res.json(calls);
     }
 
     if (isSchoolAdmin(user)) {
-      if (!user.schoolId) return res.json([]);
+      if (!schoolId) return res.json([]);
       if (scope === "mine") {
         const calls = await getCallsByUser(user.id);
         return res.json(calls);
       }
       const userIdParam = req.query.userId ? parseInt(req.query.userId, 10) : null;
       if (userIdParam) {
-        const calls = await getCallsBySchoolAndUser(user.schoolId, userIdParam);
+        const calls = await getCallsBySchoolAndUser(schoolId, userIdParam);
         return res.json(calls);
       }
-      const calls = await getCallsBySchool(user.schoolId);
+      const calls = await getCallsBySchool(schoolId);
       return res.json(calls);
     }
 

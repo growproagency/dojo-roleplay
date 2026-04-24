@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { requireUser } from "../middleware/auth.js";
+import { requireUser, effectiveSchoolId } from "../middleware/auth.js";
 import { createSessionToken } from "../lib/sessionToken.js";
 import { ENV } from "../config/env.js";
 import { getActiveCustomScenarios } from "../db.js";
@@ -73,9 +73,13 @@ Be concise. Once you know both the scenario and difficulty, immediately call the
 // to identify the tenant for a web call.
 router.post("/session-token", requireUser, (req, res) => {
   try {
+    const schoolId = effectiveSchoolId(req);
+    if (!schoolId) {
+      return res.status(400).json({ message: "Pick a school before starting a practice call." });
+    }
     const token = createSessionToken({
       userId: req.user.id,
-      schoolId: req.user.schoolId ?? null,
+      schoolId,
       ttlSeconds: 60 * 30, // 30 minutes
     });
     res.json({ token });
