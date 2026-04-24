@@ -431,8 +431,9 @@ export async function getLeaderboard(schoolId, { scenario, fromDate } = {}) {
     const userId = c.user_id;
     const userName = c.users?.name ?? null;
     const userEmail = c.users?.email ?? null;
+    const userSchoolId = c.school_id ?? null;
     if (!userMap.has(userId)) {
-      userMap.set(userId, { userName, userEmail, totalCalls: 0, scoredCalls: 0, scores: [], lastCallAt: c.created_at });
+      userMap.set(userId, { userName, userEmail, schoolId: userSchoolId, totalCalls: 0, scoredCalls: 0, scores: [], lastCallAt: c.created_at });
     }
     const entry = userMap.get(userId);
     entry.totalCalls++;
@@ -454,6 +455,7 @@ export async function getLeaderboard(schoolId, { scenario, fromDate } = {}) {
       userId,
       userName: entry.userName,
       userEmail: entry.userEmail,
+      schoolId: entry.schoolId,
       totalCalls: entry.totalCalls,
       scoredCalls: entry.scoredCalls,
       avgScore,

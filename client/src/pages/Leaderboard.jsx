@@ -1,5 +1,6 @@
 import DashboardLayout from "@/components/DashboardLayout";
-import { fetchLeaderboard, fetchScenarios } from "@/lib/api";
+import { fetchLeaderboard, fetchScenarios, fetchAdminSchools } from "@/lib/api";
+import { useAuth } from "@/hooks/useAuth";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -65,21 +66,33 @@ function StaffIdentity({ entry, align = "left", size = "sm" }) {
 }
 
 export default function Leaderboard() {
+  const { isGlobalAdmin } = useAuth();
   const [range, setRange] = useState("all");
   const [scenario, setScenario] = useState("all");
+  const [schoolId, setSchoolId] = useState("all");
 
   const { data: scenarios } = useQuery({
     queryKey: ["scenarios"],
     queryFn: fetchScenarios,
   });
 
+  const { data: schools } = useQuery({
+    queryKey: ["admin-schools"],
+    queryFn: fetchAdminSchools,
+    enabled: isGlobalAdmin,
+  });
+
+  const schoolNameById = new Map((schools ?? []).map((s) => [s.id, s.name]));
+  const showSchoolColumn = isGlobalAdmin && schoolId === "all";
+
   const filters = {
     ...(range !== "all" && { range }),
     ...(scenario !== "all" && { scenario }),
+    ...(schoolId !== "all" && { schoolId }),
   };
 
   const { data, isLoading } = useQuery({
-    queryKey: ["leaderboard", range, scenario],
+    queryKey: ["leaderboard", range, scenario, schoolId],
     queryFn: () => fetchLeaderboard(filters),
   });
 
@@ -120,6 +133,11 @@ export default function Leaderboard() {
                         <RankIcon rank={entry.rank} />
                       </div>
                       <StaffIdentity entry={entry} align="center" size="lg" />
+                      {showSchoolColumn && (
+                        <p className="text-xs text-muted-foreground truncate">
+                          {schoolNameById.get(entry.schoolId) ?? "—"}
+                        </p>
+                      )}
                       <div className="flex justify-center">
                         <ScoreBadge score={entry.avgScore} />
                       </div>
@@ -178,6 +196,19 @@ export default function Leaderboard() {
                       ))}
                     </SelectContent>
                   </Select>
+                  {isGlobalAdmin && (
+                    <Select value={schoolId} onValueChange={setSchoolId}>
+                      <SelectTrigger className="w-full sm:w-52">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All schools</SelectItem>
+                        {(schools ?? []).map((s) => (
+                          <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
                 </div>
 
                 {!data || data.length === 0 ? (
@@ -195,6 +226,9 @@ export default function Leaderboard() {
                         <tr className="border-b border-border">
                           <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Rank</th>
                           <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Staff Member</th>
+                          {showSchoolColumn && (
+                            <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">School</th>
+                          )}
                           <th className="text-right px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Avg Score</th>
                           <th className="text-right px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Best Score</th>
                           <th className="text-right px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Total Calls</th>
@@ -216,6 +250,11 @@ export default function Leaderboard() {
                             <td className="px-4 py-3">
                               <StaffIdentity entry={entry} />
                             </td>
+                            {showSchoolColumn && (
+                              <td className="px-4 py-3 text-sm text-muted-foreground">
+                                {schoolNameById.get(entry.schoolId) ?? "—"}
+                              </td>
+                            )}
                             <td className="px-4 py-3 text-right">
                               <ScoreBadge score={entry.avgScore} />
                             </td>

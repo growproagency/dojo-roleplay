@@ -9,12 +9,14 @@ import {
 import {
   BookOpen,
   ChevronDown,
+  FileText,
   Loader2,
   PhoneIncoming,
   PhoneOutgoing,
   Users,
 } from "lucide-react";
 import { useState } from "react";
+import TrainingScriptDialog from "./TrainingScriptDialog";
 
 const DIFFICULTIES = [
   { label: "Easy", dot: "bg-green-500", blurb: "Friendly, few objections. Good for warm-up." },
@@ -65,6 +67,7 @@ const BUILT_IN_DETAILS = {
 
 export default function ScenariosOverview() {
   const [open, setOpen] = useState(true);
+  const [scriptForTitle, setScriptForTitle] = useState(null);
   const { data: scenarios, isLoading } = useQuery({
     queryKey: ["scenarios"],
     queryFn: fetchScenarios,
@@ -158,6 +161,17 @@ export default function ScenariosOverview() {
                           ))}
                         </div>
                       )}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setScriptForTitle(s.title);
+                        }}
+                        className="inline-flex items-center gap-1 text-xs text-primary hover:underline pt-1"
+                      >
+                        <FileText className="w-3 h-3" />
+                        View training script
+                      </button>
                     </div>
                   );
                 })}
@@ -183,6 +197,11 @@ export default function ScenariosOverview() {
           </CardContent>
         </CollapsibleContent>
       </Collapsible>
+      <TrainingScriptDialog
+        open={!!scriptForTitle}
+        onOpenChange={(v) => !v && setScriptForTitle(null)}
+        scenarioTitle={scriptForTitle}
+      />
     </Card>
   );
 }

@@ -53,6 +53,7 @@ export const fetchLeaderboard = (params = {}) => {
   const qs = new URLSearchParams();
   if (params.scenario) qs.set("scenario", params.scenario);
   if (params.range) qs.set("range", params.range);
+  if (params.schoolId) qs.set("schoolId", params.schoolId);
   const query = qs.toString();
   return apiFetch(`/leaderboard${query ? `?${query}` : ""}`);
 };
