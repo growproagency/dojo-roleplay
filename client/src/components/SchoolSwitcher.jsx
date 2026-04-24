@@ -30,7 +30,7 @@ export default function SchoolSwitcher() {
         Global admin
       </span>
       <Select value={value} onValueChange={onChange}>
-        <SelectTrigger className="h-8 text-sm font-semibold px-2 -ml-1 border-transparent hover:bg-secondary">
+        <SelectTrigger className="h-8 w-full max-w-full text-sm font-semibold px-2 -ml-1 border-transparent hover:bg-secondary [&>span]:truncate [&>span]:block [&>span]:text-left">
           <SelectValue placeholder="Platform view" />
         </SelectTrigger>
         <SelectContent>

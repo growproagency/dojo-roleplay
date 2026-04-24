@@ -2,6 +2,7 @@ import { UNAUTHED_ERR_MSG } from '@/lib/constants';
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createRoot } from "react-dom/client";
 import App from "./App";
+import { ViewingSchoolProvider } from "@/contexts/ViewingSchoolContext";
 import "./index.css";
 
 const queryClient = new QueryClient();
@@ -33,6 +34,8 @@ queryClient.getMutationCache().subscribe(event => {
 
 createRoot(document.getElementById("root")).render(
   <QueryClientProvider client={queryClient}>
-    <App />
+    <ViewingSchoolProvider>
+      <App />
+    </ViewingSchoolProvider>
   </QueryClientProvider>
 );
