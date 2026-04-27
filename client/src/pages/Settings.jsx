@@ -40,16 +40,6 @@ export default function Settings() {
   const [form, setForm] = useState(DEFAULT_FORM);
   const [saved, setSaved] = useState(false);
 
-  if (needsSchool) {
-    return (
-      <DashboardLayout>
-        <div className="max-w-3xl mx-auto py-12">
-          <PickSchoolEmptyState message="Pick a school from the sidebar to edit its settings." />
-        </div>
-      </DashboardLayout>
-    );
-  }
-
   // Populate form when settings load
   useEffect(() => {
     if (settings) {
@@ -78,6 +68,16 @@ export default function Settings() {
     },
     onError: (err) => toast.error(err.message),
   });
+
+  if (needsSchool) {
+    return (
+      <DashboardLayout>
+        <div className="max-w-3xl mx-auto py-12">
+          <PickSchoolEmptyState message="Pick a school from the sidebar to edit its settings." />
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   const handleChange = (field, value) => {
     setForm((prev) => ({ ...prev, [field]: value }));
