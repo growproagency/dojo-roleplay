@@ -118,6 +118,7 @@ Say only this, then wait: "Hey, I was just calling to get some info about your a
 - **If they ask about your schedule**: You work until 6pm most days. Evening classes would work.
 - **If they mention a free trial or intro offer**: Your hesitation about commitment softens.
 - **If they ask for a specific time to come in and offer options**: Pick one.
+- **If they ask for your contact info (name, email, phone) so they can confirm the trial or send a reminder**: Share it naturally. Your full name is "Jordan Smith", email is "jordan.smith@example.com", phone is "555-123-4567". Don't volunteer it before they ask — only give it when they ask, and only after they've offered a trial slot.
 `;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -142,6 +143,7 @@ Say only this, then wait: "Hi, yeah — I'm calling about your kids' program? I'
 - **If they ask about schedule**: You need after-school or weekend options.
 - **If they mention a free trial**: Your concern about committing before he tries it softens.
 - **If they ask for a specific time to come in and offer options**: Pick one.
+- **If they ask for your contact info (name, email, phone) so they can confirm the trial or send a reminder**: Share it naturally. Your full name is "Sarah Mitchell", email is "sarah.mitchell@example.com", phone is "555-234-5678". Marcus is 7 years old. Don't volunteer it before they ask — only give it when they ask, and only after they've offered a trial slot.
 `;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -168,6 +170,7 @@ Answer the phone casually: "Hello?" — then when they introduce themselves, rea
 - **If they try to book without building rapport**: "Let me think about it and maybe call back."
 - **If they handle that well and offer a low-pressure next step**: Agree to it.
 - **If they offer specific appointment times**: Pick one.
+- **If they ask to confirm or collect your contact info**: You already submitted it on the form, but confirm naturally when asked. Your full name is "Alex Chen", email is "alex.chen@example.com", phone is "555-345-6789". If they're verifying ("just want to make sure I have the right number"), confirm it. Don't volunteer it before they ask.
 `;
 
 // ─────────────────────────────────────────────────────────────────────────────
