@@ -30,7 +30,6 @@ import { Button } from "./ui/button";
 import CallWidget from "./CallWidget";
 import NameRequiredDialog from "./NameRequiredDialog";
 import SchoolSwitcher from "./SchoolSwitcher";
-import { ViewingSchoolProvider } from "@/contexts/ViewingSchoolContext";
 
 // `requires` controls visibility:
 //   undefined         → visible to all authenticated users
@@ -124,17 +123,15 @@ export default function DashboardLayout({
   }
 
   return (
-    <ViewingSchoolProvider>
-      <SidebarProvider
-        style={{
-            "--sidebar-width": `${sidebarWidth}px`,
-          }}
-      >
-        <DashboardLayoutContent setSidebarWidth={setSidebarWidth}>
-          {children}
-        </DashboardLayoutContent>
-      </SidebarProvider>
-    </ViewingSchoolProvider>
+    <SidebarProvider
+      style={{
+          "--sidebar-width": `${sidebarWidth}px`,
+        }}
+    >
+      <DashboardLayoutContent setSidebarWidth={setSidebarWidth}>
+        {children}
+      </DashboardLayoutContent>
+    </SidebarProvider>
   );
 }
 
