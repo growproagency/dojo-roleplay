@@ -56,6 +56,17 @@ export default function CallWidget() {
     return () => clearInterval(timerRef.current);
   }, [webCallActive]);
 
+  // Defensive: if the component ever unmounts mid-call (HMR, etc), tear down
+  // the Vapi connection so it doesn't keep streaming audio in the background.
+  useEffect(() => {
+    return () => {
+      if (vapiRef.current) {
+        try { vapiRef.current.stop(); } catch { /* ignore */ }
+        vapiRef.current = null;
+      }
+    };
+  }, []);
+
   const formatTimer = (s) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
 
   const startWebCall = useCallback(async () => {
