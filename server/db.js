@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { randomBytes } from "node:crypto";
 import { ENV } from "./config/env.js";
+import { FALLBACK_COST_PER_SECOND } from "./config/pricing.js";
 
 let _supabase = null;
 
@@ -46,6 +47,8 @@ function toCallCamel(row) {
     recordingS3Url: row.recording_s3_url,
     transcription: row.transcription,
     transcriptTurns: row.transcript_turns,
+    costUsd: row.cost_usd != null ? Number(row.cost_usd) : null,
+    costBreakdown: row.cost_breakdown ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -280,6 +283,8 @@ export async function updateCall(id, data) {
     recordingS3Url: "recording_s3_url",
     transcription: "transcription",
     transcriptTurns: "transcript_turns",
+    costUsd: "cost_usd",
+    costBreakdown: "cost_breakdown",
   };
 
   for (const [k, v] of Object.entries(data)) {
@@ -381,6 +386,10 @@ export async function createScorecard(data) {
       missed_opportunities: data.missedOpportunities,
       suggestions: data.suggestions,
       summary: data.summary ?? null,
+      prompt_tokens: data.promptTokens ?? null,
+      completion_tokens: data.completionTokens ?? null,
+      model: data.model ?? null,
+      cost_usd: data.costUsd ?? null,
     })
     .select("id")
     .single();
@@ -530,34 +539,44 @@ export async function upsertSchoolSettings(data) {
 
 // ---- Usage / Billing (JS aggregation) ----
 
-const COST_PER_SECOND = 0.00117;
+// Per-row Vapi cost: real value if recorded, else fallback estimate from duration.
+function effectiveCallCost(row) {
+  if (row.cost_usd != null) return Number(row.cost_usd);
+  return (row.duration_seconds || 0) * FALLBACK_COST_PER_SECOND;
+}
+
+const round2 = (n) => Math.round(n * 100) / 100;
 
 export async function getUsageSummary(fromDate, toDate, schoolId) {
   const sb = getSupabase();
-  if (!sb) return {
+  const empty = {
     totalCalls: 0, completedCalls: 0, totalSeconds: 0, totalMinutes: 0,
-    estimatedCostUsd: 0, byScenario: [], byMonth: [],
+    callCostUsd: 0, scoringCostUsd: 0, estimatedCostUsd: 0,
+    byScenario: [], byMonth: [],
   };
+  if (!sb) return empty;
 
-  let query = sb.from("calls").select("id, scenario, status, duration_seconds, created_at, school_id");
+  let query = sb.from("calls").select("id, scenario, status, duration_seconds, created_at, school_id, cost_usd");
   if (fromDate) query = query.gte("created_at", fromDate.toISOString());
   if (toDate) query = query.lte("created_at", toDate.toISOString());
   if (schoolId != null) query = query.eq("school_id", schoolId);
 
   const { data: rows, error } = await query;
-  if (error) { console.error("[Database] getUsageSummary error:", error); return { totalCalls: 0, completedCalls: 0, totalSeconds: 0, totalMinutes: 0, estimatedCostUsd: 0, byScenario: [], byMonth: [] }; }
+  if (error) { console.error("[Database] getUsageSummary error:", error); return empty; }
 
   const allRows = rows || [];
   const completedStatuses = ["completed", "scoring", "scored"];
 
   let totalSeconds = 0;
   let completedCalls = 0;
+  let callCostUsd = 0;
   const scenarioMap = new Map();
   const monthMap = new Map();
 
   for (const r of allRows) {
     const dur = r.duration_seconds || 0;
     totalSeconds += dur;
+    callCostUsd += effectiveCallCost(r);
     if (completedStatuses.includes(r.status)) completedCalls++;
 
     // By scenario
@@ -574,6 +593,20 @@ export async function getUsageSummary(fromDate, toDate, schoolId) {
     mo.seconds += dur;
   }
 
+  // Sum scoring cost for the same set of calls.
+  let scoringCostUsd = 0;
+  if (allRows.length > 0) {
+    const callIds = allRows.map((r) => r.id);
+    const { data: scoringRows, error: scErr } = await sb
+      .from("scorecards")
+      .select("call_id, cost_usd")
+      .in("call_id", callIds);
+    if (scErr) console.error("[Database] getUsageSummary scoring error:", scErr);
+    for (const s of scoringRows || []) {
+      if (s.cost_usd != null) scoringCostUsd += Number(s.cost_usd);
+    }
+  }
+
   const totalMinutes = Math.round((totalSeconds / 60) * 10) / 10;
 
   return {
@@ -581,7 +614,9 @@ export async function getUsageSummary(fromDate, toDate, schoolId) {
     completedCalls,
     totalSeconds,
     totalMinutes,
-    estimatedCostUsd: Math.round(totalSeconds * COST_PER_SECOND * 100) / 100,
+    callCostUsd: round2(callCostUsd),
+    scoringCostUsd: round2(scoringCostUsd),
+    estimatedCostUsd: round2(callCostUsd + scoringCostUsd),
     byScenario: Array.from(scenarioMap.entries())
       .map(([scenario, v]) => ({ scenario, calls: v.calls, seconds: v.seconds, minutes: Math.round((v.seconds / 60) * 10) / 10 }))
       .sort((a, b) => b.seconds - a.seconds),
@@ -595,7 +630,7 @@ export async function getUsageByUser(fromDate, toDate, schoolId) {
   const sb = getSupabase();
   if (!sb) return [];
 
-  let query = sb.from("calls").select("id, user_id, school_id, status, duration_seconds, created_at, users!inner(name, email)");
+  let query = sb.from("calls").select("id, user_id, school_id, status, duration_seconds, created_at, cost_usd, users!inner(name, email)");
   if (fromDate) query = query.gte("created_at", fromDate.toISOString());
   if (toDate) query = query.lte("created_at", toDate.toISOString());
   if (schoolId != null) query = query.eq("school_id", schoolId);
@@ -603,11 +638,22 @@ export async function getUsageByUser(fromDate, toDate, schoolId) {
   const { data: callRows, error: callErr } = await query;
   if (callErr) { console.error("[Database] getUsageByUser error:", callErr); return []; }
 
-  // Fetch scorecards for avg score
-  const { data: scorecardRows } = await sb.from("scorecards").select("call_id, overall_score");
+  // Fetch scorecards (overall_score for avg, cost_usd for per-user scoring spend)
+  const callIds = (callRows || []).map((c) => c.id);
+  let scorecardRows = [];
+  if (callIds.length > 0) {
+    const { data, error } = await sb
+      .from("scorecards")
+      .select("call_id, overall_score, cost_usd")
+      .in("call_id", callIds);
+    if (error) console.error("[Database] getUsageByUser scoring error:", error);
+    scorecardRows = data || [];
+  }
   const scoreByCallId = new Map();
-  for (const sc of scorecardRows || []) {
+  const scoringCostByCallId = new Map();
+  for (const sc of scorecardRows) {
     scoreByCallId.set(sc.call_id, sc.overall_score);
+    if (sc.cost_usd != null) scoringCostByCallId.set(sc.call_id, Number(sc.cost_usd));
   }
 
   const completedStatuses = ["completed", "scoring", "scored"];
@@ -618,12 +664,14 @@ export async function getUsageByUser(fromDate, toDate, schoolId) {
     const userName = c.users?.name || "Unknown";
     const email = c.users?.email ?? null;
     if (!userMap.has(userId)) {
-      userMap.set(userId, { userName, email, totalCalls: 0, completedCalls: 0, totalSeconds: 0, scores: [], lastCallAt: null });
+      userMap.set(userId, { userName, email, totalCalls: 0, completedCalls: 0, totalSeconds: 0, callCost: 0, scoringCost: 0, scores: [], lastCallAt: null });
     }
     const entry = userMap.get(userId);
     entry.totalCalls++;
     if (completedStatuses.includes(c.status)) entry.completedCalls++;
     entry.totalSeconds += c.duration_seconds || 0;
+    entry.callCost += effectiveCallCost(c);
+    entry.scoringCost += scoringCostByCallId.get(c.id) ?? 0;
     const score = scoreByCallId.get(c.id);
     if (score !== undefined) entry.scores.push(score);
     if (!entry.lastCallAt || c.created_at > entry.lastCallAt) entry.lastCallAt = c.created_at;
@@ -643,7 +691,9 @@ export async function getUsageByUser(fromDate, toDate, schoolId) {
         completedCalls: e.completedCalls,
         totalSeconds: e.totalSeconds,
         totalMinutes,
-        estimatedCostUsd: Math.round(e.totalSeconds * COST_PER_SECOND * 100) / 100,
+        callCostUsd: round2(e.callCost),
+        scoringCostUsd: round2(e.scoringCost),
+        estimatedCostUsd: round2(e.callCost + e.scoringCost),
         avgScore,
         lastCallAt: e.lastCallAt,
       };

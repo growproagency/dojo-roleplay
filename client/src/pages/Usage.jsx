@@ -169,9 +169,13 @@ export default function Usage() {
           />
           <StatCard
             icon={<DollarSign className="w-4 h-4 text-green-400" />}
-            label="Est. Cost"
+            label="Cost"
             value={isLoading ? "—" : `$${(summary?.estimatedCostUsd ?? 0).toFixed(2)}`}
-            sub="~$0.07 / min blended"
+            sub={
+              isLoading
+                ? ""
+                : `Calls: $${(summary?.callCostUsd ?? 0).toFixed(2)} · Scoring: $${(summary?.scoringCostUsd ?? 0).toFixed(2)}`
+            }
           />
           <StatCard
             icon={<Users className="w-4 h-4 text-purple-400" />}
@@ -262,7 +266,8 @@ export default function Usage() {
               Usage by Staff Member
             </CardTitle>
             <CardDescription className="text-xs">
-              Sorted by total minutes used. Estimated cost uses a blended rate of ~$0.07/min.
+              Sorted by total minutes used. Cost is the actual Vapi + OpenAI spend per call when
+              recorded; older calls fall back to a $0.07/min estimate.
             </CardDescription>
           </CardHeader>
           <CardContent className="p-0">
@@ -351,8 +356,9 @@ export default function Usage() {
 
         {/* Cost methodology note */}
         <p className="text-xs text-muted-foreground border border-border/40 rounded-lg px-4 py-3 bg-muted/20">
-          <strong>Cost estimate methodology:</strong> Blended rate of ~$0.07/min covers Vapi voice AI minutes,
-          LLM conversation, transcription, and post-call scoring. Actual costs vary by call length and model usage.
+          <strong>Cost methodology:</strong> "Calls" is the actual Vapi spend (voice, LLM, transcription, transport)
+          reported by Vapi at the end of each call. "Scoring" is the actual OpenAI token spend for post-call grading.
+          Older calls without recorded cost fall back to a $0.07/min estimate.
         </p>
       </div>
     </DashboardLayout>

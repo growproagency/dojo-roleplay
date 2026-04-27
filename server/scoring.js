@@ -1,4 +1,5 @@
 import { invokeLLM } from "./services/llm.js";
+import { ENV } from "./config/env.js";
 
 const OUTBOUND_SCORING_PROMPT = `You are an expert sales coach for martial arts schools. Your job is to evaluate phone call transcripts where a school admissions staff member is practicing an outbound callback to a web lead (Alex, a prospect who submitted a form).
 
@@ -350,5 +351,11 @@ Please evaluate this admissions call against the 13-step script and return the J
   const content = typeof rawContent === "string" ? rawContent : null;
   if (!content) throw new Error("No scoring response from LLM");
 
-  return JSON.parse(content);
+  const parsed = JSON.parse(content);
+  parsed._usage = {
+    model: response.model ?? ENV.llmModel ?? null,
+    promptTokens: response.usage?.prompt_tokens ?? null,
+    completionTokens: response.usage?.completion_tokens ?? null,
+  };
+  return parsed;
 }
