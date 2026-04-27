@@ -19,6 +19,8 @@ import AdminSchools from "./pages/AdminSchools";
 import AdminSchoolDetail from "./pages/AdminSchoolDetail";
 import CustomScenarios from "./pages/CustomScenarios";
 import ResetPassword from "./pages/ResetPassword";
+import CallWidget from "./components/CallWidget";
+import NameRequiredDialog from "./components/NameRequiredDialog";
 
 function Router() {
   return (
@@ -51,6 +53,10 @@ function App() {
         <TooltipProvider>
           <Toaster />
           <Router />
+          {/* Mounted once at the app root so they survive route changes
+              (otherwise an active call would lose its UI handle on navigation). */}
+          <CallWidget />
+          <NameRequiredDialog />
         </TooltipProvider>
       </ThemeProvider>
     </ErrorBoundary>
