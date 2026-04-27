@@ -15,6 +15,7 @@ import {
 } from "../db.js";
 import { verifySessionToken } from "../lib/sessionToken.js";
 import { ENV } from "../config/env.js";
+import { estimateScoringCostUsd } from "../config/pricing.js";
 
 const router = Router();
 
@@ -601,6 +602,8 @@ async function handleEndOfCallReport(message, res) {
     transcriptTurns: turns,
     durationSeconds,
     recordingUrl: artifact?.recordingUrl || null,
+    costUsd: typeof message.cost === "number" ? message.cost : null,
+    costBreakdown: message.costBreakdown ?? null,
   });
 
   console.log(`[Vapi] Call ${dbCall.id} completed, transcript: ${turns.length} turns, duration: ${durationSeconds}s`);
@@ -639,6 +642,8 @@ async function triggerScoring(callDbId, transcript, scenario) {
     const resolved = await resolveScenario(scenario, { getCustomScenarioBySlug }).catch(() => null);
     const scenarioTitle = resolved?.title || SCENARIOS[scenario]?.title || "Training Call";
     const result = await scoreCallTranscript(transcript, scenarioTitle, resolved?.scoringPrompt);
+    const usage = result._usage ?? {};
+    const scoringCost = estimateScoringCostUsd(usage);
 
     await createScorecard({
       callId: callDbId,
@@ -648,6 +653,10 @@ async function triggerScoring(callDbId, transcript, scenario) {
       missedOpportunities: result.missedOpportunities,
       suggestions: result.suggestions,
       summary: result.summary,
+      promptTokens: usage.promptTokens ?? null,
+      completionTokens: usage.completionTokens ?? null,
+      model: usage.model ?? null,
+      costUsd: scoringCost,
     });
 
     await updateCall(callDbId, { status: "scored" });
