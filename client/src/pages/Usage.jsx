@@ -1,7 +1,24 @@
-import { fetchUsage, fetchAdminSchools } from "@/lib/api";
-import { useQuery } from "@tanstack/react-query";
+import {
+  fetchUsage,
+  fetchAdminSchools,
+  fetchSchoolsUsageOverview,
+  updateAdminSchool,
+} from "@/lib/api";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useLocation } from "wouter";
+import { toast } from "sonner";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Pencil } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -93,6 +110,205 @@ const PRESET_LABELS = {
   last_90: "Last 90 Days",
 };
 
+// ── schools overview (global admin only) ──────────────────────────────────────
+
+function statusDot(percentUsed, atCap) {
+  if (atCap) return "bg-red-500";
+  if (percentUsed != null && percentUsed >= 80) return "bg-amber-500";
+  return "bg-green-500";
+}
+
+function CapEditDialog({ school, onClose }) {
+  const queryClient = useQueryClient();
+  const [value, setValue] = useState(school?.usageCapUsd != null ? String(school.usageCapUsd) : "");
+
+  const saveMutation = useMutation({
+    mutationFn: (cap) => updateAdminSchool(school.id, { usageCapUsd: cap }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["schools-usage-overview"] });
+      queryClient.invalidateQueries({ queryKey: ["auth", "me"] });
+      toast.success("Cap updated");
+      onClose();
+    },
+    onError: (err) => toast.error(err.message || "Failed to update cap"),
+  });
+
+  const handleSave = () => {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      toast.error("Enter a number, or use \"Remove cap\" to clear.");
+      return;
+    }
+    const n = parseFloat(trimmed);
+    if (!Number.isFinite(n) || n < 0) {
+      toast.error("Cap must be a non-negative number.");
+      return;
+    }
+    saveMutation.mutate(n);
+  };
+
+  const handleRemove = () => saveMutation.mutate(null);
+
+  return (
+    <Dialog open={!!school} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Set usage cap — {school?.name}</DialogTitle>
+          <DialogDescription>
+            Lifetime cumulative spend in USD. New calls are blocked when reached.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-2">
+          <Label htmlFor="cap">Cap (USD)</Label>
+          <Input
+            id="cap"
+            type="number"
+            min={0}
+            step={0.01}
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            placeholder="50.00"
+            autoFocus
+          />
+        </div>
+        <DialogFooter className="gap-2">
+          <Button variant="ghost" onClick={handleRemove} disabled={saveMutation.isPending}>
+            Remove cap
+          </Button>
+          <Button onClick={handleSave} disabled={saveMutation.isPending}>
+            {saveMutation.isPending ? "Saving…" : "Save"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function SchoolsOverviewTable({ onSelectSchool }) {
+  const [editTarget, setEditTarget] = useState(null);
+  const { data: rows = [], isLoading } = useQuery({
+    queryKey: ["schools-usage-overview"],
+    queryFn: fetchSchoolsUsageOverview,
+  });
+
+  // Sort: at-cap first, then by % used desc, then by total spend desc.
+  const sorted = useMemo(() => {
+    return [...rows].sort((a, b) => {
+      if (a.atCap !== b.atCap) return a.atCap ? -1 : 1;
+      const pa = a.percentUsed ?? -1;
+      const pb = b.percentUsed ?? -1;
+      if (pa !== pb) return pb - pa;
+      return (b.totalCostUsd ?? 0) - (a.totalCostUsd ?? 0);
+    });
+  }, [rows]);
+
+  const totalSpent = sorted.reduce((s, r) => s + (r.totalCostUsd ?? 0), 0);
+  const totalCap = sorted.reduce((s, r) => s + (r.usageCapUsd ?? 0), 0);
+
+  const fmtUsd = (n) => `$${(n ?? 0).toFixed(2)}`;
+  const estMinutesLeft = (r) => {
+    if (r.usageCapUsd == null || r.totalCalls === 0 || r.totalSeconds === 0) return null;
+    const remaining = Math.max(r.usageCapUsd - r.totalCostUsd, 0);
+    const costPerSec = r.totalCostUsd / r.totalSeconds;
+    if (costPerSec <= 0) return null;
+    const secondsLeft = remaining / costPerSec;
+    return Math.round(secondsLeft / 60);
+  };
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base flex items-center gap-2">
+          <Users className="w-4 h-4 text-muted-foreground" />
+          Schools — usage & caps
+        </CardTitle>
+        <CardDescription className="text-xs">
+          Cumulative lifetime spend per school. Set a cap to hard-stop new calls when the school reaches it.
+          Click a row to drill into per-user detail.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="p-0">
+        {isLoading ? (
+          <div className="px-6 py-4 text-sm text-muted-foreground">Loading…</div>
+        ) : sorted.length === 0 ? (
+          <div className="px-6 py-4 text-sm text-muted-foreground">No schools yet.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
+                  <th className="px-4 py-3"></th>
+                  <th className="px-4 py-3">School</th>
+                  <th className="px-4 py-3 text-right">Total Spent</th>
+                  <th className="px-4 py-3 text-right">Cap</th>
+                  <th className="px-4 py-3 text-right">% Used</th>
+                  <th className="px-4 py-3 text-right">Est. Min Left</th>
+                  <th className="px-4 py-3 text-right">Calls</th>
+                  <th className="px-4 py-3"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {sorted.map((row) => {
+                  const minsLeft = estMinutesLeft(row);
+                  return (
+                    <tr
+                      key={row.id}
+                      className="border-b border-border/50 hover:bg-secondary/30 transition-colors cursor-pointer"
+                      onClick={() => onSelectSchool(String(row.id))}
+                    >
+                      <td className="px-4 py-3 align-middle">
+                        <span
+                          className={`inline-block w-2.5 h-2.5 rounded-full ${statusDot(row.percentUsed, row.atCap)}`}
+                          title={row.atCap ? "At cap" : row.percentUsed != null && row.percentUsed >= 80 ? "Approaching cap" : "OK"}
+                        />
+                      </td>
+                      <td className="px-4 py-3 font-medium">{row.name}</td>
+                      <td className="px-4 py-3 text-right text-foreground font-medium">{fmtUsd(row.totalCostUsd)}</td>
+                      <td className="px-4 py-3 text-right text-muted-foreground">
+                        {row.usageCapUsd != null ? fmtUsd(row.usageCapUsd) : "—"}
+                      </td>
+                      <td className="px-4 py-3 text-right text-muted-foreground">
+                        {row.percentUsed != null ? `${row.percentUsed}%` : "—"}
+                      </td>
+                      <td className="px-4 py-3 text-right text-muted-foreground">
+                        {minsLeft != null ? `~${minsLeft} min` : "—"}
+                      </td>
+                      <td className="px-4 py-3 text-right text-muted-foreground">{row.totalCalls}</td>
+                      <td className="px-4 py-3 text-right">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => { e.stopPropagation(); setEditTarget(row); }}
+                          className="h-7 px-2"
+                        >
+                          <Pencil className="w-3.5 h-3.5 mr-1" />
+                          Cap
+                        </Button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot>
+                <tr className="border-t border-border/60 bg-muted/20 text-xs">
+                  <td className="px-4 py-2"></td>
+                  <td className="px-4 py-2 font-medium">Total ({sorted.length} schools)</td>
+                  <td className="px-4 py-2 text-right font-medium">{fmtUsd(totalSpent)}</td>
+                  <td className="px-4 py-2 text-right text-muted-foreground">{totalCap > 0 ? fmtUsd(totalCap) : "—"}</td>
+                  <td colSpan={4}></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
+      </CardContent>
+      {editTarget && (
+        <CapEditDialog school={editTarget} onClose={() => setEditTarget(null)} />
+      )}
+    </Card>
+  );
+}
+
 // ── component ─────────────────────────────────────────────────────────────────
 
 export default function Usage() {
@@ -181,6 +397,14 @@ export default function Usage() {
           </div>
         </div>
 
+        {/* Schools overview table — shown when no specific school is picked */}
+        {schoolFilter === "all" && (
+          <SchoolsOverviewTable onSelectSchool={setSchoolFilter} />
+        )}
+
+        {/* Per-school detail — only when a specific school is picked */}
+        {schoolFilter !== "all" && (
+        <>
         {/* Summary stat cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <StatCard
@@ -388,6 +612,8 @@ export default function Usage() {
           reported by Vapi at the end of each call. "Scoring" is the actual OpenAI token spend for post-call grading.
           Older calls without recorded cost fall back to a $0.07/min estimate.
         </p>
+        </>
+        )}
       </div>
     </DashboardLayout>
   );

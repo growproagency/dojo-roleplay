@@ -2,7 +2,7 @@ import { Router } from "express";
 import { requireUser, effectiveSchoolId } from "../middleware/auth.js";
 import { createSessionToken } from "../lib/sessionToken.js";
 import { ENV } from "../config/env.js";
-import { getActiveCustomScenarios } from "../db.js";
+import { getActiveCustomScenarios, getSchoolUsageStatus } from "../db.js";
 
 const router = Router();
 
@@ -71,12 +71,22 @@ Be concise. Once you know both the scenario and difficulty, immediately call the
 // POST /api/vapi-config/session-token — issue a short-lived signed token
 // the client passes as Vapi metadata. The webhook verifies the signature
 // to identify the tenant for a web call.
-router.post("/session-token", requireUser, (req, res) => {
+router.post("/session-token", requireUser, async (req, res) => {
   try {
     const schoolId = effectiveSchoolId(req);
     if (!schoolId) {
       return res.status(400).json({ message: "Pick a school before starting a practice call." });
     }
+
+    // Hard usage cap: block if the school has reached its lifetime spend ceiling.
+    const status = await getSchoolUsageStatus(schoolId).catch(() => null);
+    if (status?.atCap) {
+      return res.status(402).json({
+        message: "This school has reached its usage limit. Contact your administrator to raise the cap.",
+        code: "USAGE_CAP_REACHED",
+      });
+    }
+
     const token = createSessionToken({
       userId: req.user.id,
       schoolId,

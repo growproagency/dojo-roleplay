@@ -70,6 +70,7 @@ function toSchoolCamel(row) {
     priceRangeHigh: row.price_range_high,
     programDirectorName: row.program_director_name,
     additionalNotes: row.additional_notes,
+    usageCapUsd: row.usage_cap_usd != null ? Number(row.usage_cap_usd) : null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -714,6 +715,88 @@ export async function getAllSchools() {
   return (data || []).map(toSchoolCamel);
 }
 
+// Returns every school with their cumulative usage attached. One row per school.
+// Used by the global-admin Usage & Billing schools-overview table.
+//   { ...school, totalCallCostUsd, totalScoringCostUsd, totalCostUsd, totalCalls, totalSeconds, totalMinutes, percentUsed, atCap }
+export async function getSchoolsWithUsage() {
+  const sb = getSupabase();
+  if (!sb) return [];
+
+  const [schoolsRes, callsRes, scoringRes] = await Promise.all([
+    sb.from("schools").select("*").order("created_at", { ascending: true }),
+    sb.from("calls").select("school_id, duration_seconds, cost_usd"),
+    sb.from("scorecards").select("call_id, cost_usd, calls!inner(school_id)"),
+  ]);
+
+  if (schoolsRes.error) { console.error("[Database] getSchoolsWithUsage schools error:", schoolsRes.error); return []; }
+  const callRows = callsRes.data || [];
+  const scoringRows = scoringRes.data || [];
+
+  // Aggregate calls by school
+  const callTotals = new Map(); // schoolId → { cost, seconds, count }
+  for (const r of callRows) {
+    if (r.school_id == null) continue;
+    if (!callTotals.has(r.school_id)) callTotals.set(r.school_id, { cost: 0, seconds: 0, count: 0 });
+    const t = callTotals.get(r.school_id);
+    t.cost += effectiveCallCost(r);
+    t.seconds += r.duration_seconds || 0;
+    t.count += 1;
+  }
+
+  // Aggregate scoring costs by school (joined via calls)
+  const scoringTotals = new Map(); // schoolId → cost
+  for (const s of scoringRows) {
+    const sid = s.calls?.school_id;
+    if (sid == null || s.cost_usd == null) continue;
+    scoringTotals.set(sid, (scoringTotals.get(sid) ?? 0) + Number(s.cost_usd));
+  }
+
+  return (schoolsRes.data || []).map((row) => {
+    const school = toSchoolCamel(row);
+    const callT = callTotals.get(school.id) ?? { cost: 0, seconds: 0, count: 0 };
+    const scoringCost = scoringTotals.get(school.id) ?? 0;
+    const totalCostUsd = round2(callT.cost + scoringCost);
+    const cap = school.usageCapUsd;
+    const percentUsed = cap != null && cap > 0 ? Math.round((totalCostUsd / cap) * 100) : null;
+    return {
+      ...school,
+      totalCallCostUsd: round2(callT.cost),
+      totalScoringCostUsd: round2(scoringCost),
+      totalCostUsd,
+      totalCalls: callT.count,
+      totalSeconds: callT.seconds,
+      totalMinutes: Math.round((callT.seconds / 60) * 10) / 10,
+      percentUsed,
+      atCap: cap != null && totalCostUsd >= cap,
+    };
+  });
+}
+
+// Lightweight cap check for enforcement points (session-token, phone webhook).
+// Returns { capUsd, totalCostUsd, atCap, percentUsed }. Null cap = unrestricted.
+export async function getSchoolUsageStatus(schoolId) {
+  const sb = getSupabase();
+  if (!sb || !schoolId) return { capUsd: null, totalCostUsd: 0, atCap: false, percentUsed: null };
+
+  const [schoolRes, callsRes, scoringRes] = await Promise.all([
+    sb.from("schools").select("usage_cap_usd").eq("id", schoolId).single(),
+    sb.from("calls").select("id, duration_seconds, cost_usd").eq("school_id", schoolId),
+    // Scorecards are joined by call_id; pull just for this school's calls.
+    sb.from("scorecards").select("cost_usd, calls!inner(school_id)").eq("calls.school_id", schoolId),
+  ]);
+
+  const capUsd = schoolRes.data?.usage_cap_usd != null ? Number(schoolRes.data.usage_cap_usd) : null;
+  let total = 0;
+  for (const c of callsRes.data || []) total += effectiveCallCost(c);
+  for (const s of scoringRes.data || []) {
+    if (s.cost_usd != null) total += Number(s.cost_usd);
+  }
+  const totalCostUsd = round2(total);
+  const atCap = capUsd != null && totalCostUsd >= capUsd;
+  const percentUsed = capUsd != null && capUsd > 0 ? Math.round((totalCostUsd / capUsd) * 100) : null;
+  return { capUsd, totalCostUsd, atCap, percentUsed };
+}
+
 export async function deleteSchool(id) {
   const sb = getSupabase();
   if (!sb) throw new Error("Supabase not available");
@@ -850,12 +933,14 @@ export async function updateSchool(id, data) {
     priceRangeHigh: "price_range_high",
     programDirectorName: "program_director_name",
     additionalNotes: "additional_notes",
+    usageCapUsd: "usage_cap_usd",
   };
 
   const row = {};
   for (const [k, v] of Object.entries(data)) {
     if (v === undefined) continue;
     const snakeKey = keyMap[k];
+    // Allow null to clear (e.g. "remove cap")
     if (snakeKey) row[snakeKey] = v;
   }
 
