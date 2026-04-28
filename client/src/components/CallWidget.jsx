@@ -22,6 +22,9 @@ export default function CallWidget() {
   const { user, isGlobalAdmin } = useAuth();
   const { viewingSchoolId } = useViewingSchool();
   const needsSchool = isGlobalAdmin && viewingSchoolId == null;
+  // School at usage cap: hard-block start call before user clicks (back-end will 402 anyway).
+  // Only meaningful for non-global users — global admins use the viewing-school context.
+  const atCap = !isGlobalAdmin && user?.school?.usageStatus?.atCap === true;
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [webCallActive, setWebCallActive] = useState(false);
@@ -227,10 +230,16 @@ export default function CallWidget() {
                     </div>
                     <Button
                       onClick={startWebCall}
-                      disabled={webCallConnecting || needsSchool}
+                      disabled={webCallConnecting || needsSchool || atCap}
                       className="w-full gap-2"
                       size="lg"
-                      title={needsSchool ? "Pick a school to start a practice call." : undefined}
+                      title={
+                        atCap
+                          ? "Your school has reached its usage limit."
+                          : needsSchool
+                          ? "Pick a school to start a practice call."
+                          : undefined
+                      }
                     >
                       {webCallConnecting ? (
                         <Loader2 className="w-4 h-4 animate-spin" />
@@ -242,6 +251,11 @@ export default function CallWidget() {
                     {needsSchool && (
                       <p className="text-xs text-muted-foreground">
                         Pick a school in the sidebar before starting a practice call.
+                      </p>
+                    )}
+                    {atCap && (
+                      <p className="text-xs text-red-500">
+                        Usage limit reached. Contact your school administrator to raise the cap.
                       </p>
                     )}
                   </div>

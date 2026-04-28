@@ -5,6 +5,7 @@ import {
   getUsageSummary,
   getUsageByUser,
   getAllSchools,
+  getSchoolsWithUsage,
   getSchoolById,
   createSchool,
   updateSchool,
@@ -82,6 +83,19 @@ router.get("/schools", async (req, res) => {
   }
 });
 
+// GET /api/admin/schools/usage-overview — every school + cumulative usage + cap.
+// Powers the global-admin Usage & Billing schools-overview table.
+// IMPORTANT: must be declared BEFORE the /:id route or Express will match ":id" first.
+router.get("/schools/usage-overview", async (_req, res) => {
+  try {
+    const rows = await getSchoolsWithUsage();
+    res.json(rows);
+  } catch (err) {
+    console.error("[Admin] schools usage overview error:", err);
+    res.status(500).json({ message: "Failed to fetch schools usage overview" });
+  }
+});
+
 // GET /api/admin/schools/:id — school detail with members
 router.get("/schools/:id", async (req, res) => {
   try {
@@ -130,6 +144,8 @@ router.post("/schools", async (req, res) => {
 // PUT /api/admin/schools/:id — update school details
 const updateSchoolSchema = z.object({
   name: z.string().min(1).max(255).optional(),
+  // null = remove cap (unrestricted). Number = lifetime cumulative cap in USD.
+  usageCapUsd: z.number().min(0).max(100000).nullable().optional(),
 });
 
 router.put("/schools/:id", async (req, res) => {

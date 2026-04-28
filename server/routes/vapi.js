@@ -12,6 +12,7 @@ import {
   logPhoneCallAttempt,
   getActiveCustomScenarios,
   getCustomScenarioBySlug,
+  getSchoolUsageStatus,
 } from "../db.js";
 import { verifySessionToken } from "../lib/sessionToken.js";
 import { ENV } from "../config/env.js";
@@ -224,6 +225,23 @@ async function handleAssistantRequest(message, res) {
       return res.json({
         assistant: buildRejectionAssistant(
           "Sorry, this number isn't registered with Dojo Roleplay. Please add your phone number in your account settings and try again. Goodbye."
+        ),
+      });
+    }
+
+    // Known user — but block if their school has hit its lifetime usage cap.
+    const usageStatus = await getSchoolUsageStatus(user.schoolId).catch(() => null);
+    if (usageStatus?.atCap) {
+      await logPhoneCallAttempt({
+        callerNumber,
+        vapiCallId,
+        userId: user.id,
+        schoolId: user.schoolId,
+        outcome: "rejected_cap",
+      }).catch(() => {});
+      return res.json({
+        assistant: buildRejectionAssistant(
+          "Your school has reached its usage limit. Please contact your administrator to raise the cap. Goodbye."
         ),
       });
     }

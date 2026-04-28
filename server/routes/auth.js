@@ -1,22 +1,28 @@
 import { Router } from "express";
 import { z } from "zod/v4";
 import { requireUser, softAuth } from "../middleware/auth.js";
-import { getSchoolById, updateUserProfile, getUserById, getUserByPhoneNumber } from "../db.js";
+import { getSchoolById, updateUserProfile, getUserById, getUserByPhoneNumber, getSchoolUsageStatus } from "../db.js";
 
 const router = Router();
 
-// GET /api/auth/me — return current user (with school) or null
+// GET /api/auth/me — return current user (with school + usage status) or null
 router.get("/me", softAuth, async (req, res) => {
   if (!req.user) return res.json(null);
 
   let school = null;
+  let usageStatus = null;
   if (req.user.schoolId) {
-    school = await getSchoolById(req.user.schoolId).catch(() => null);
+    [school, usageStatus] = await Promise.all([
+      getSchoolById(req.user.schoolId).catch(() => null),
+      getSchoolUsageStatus(req.user.schoolId).catch(() => null),
+    ]);
   }
 
   res.json({
     ...req.user,
-    school: school ? { id: school.id, name: school.name, slug: school.slug } : null,
+    school: school
+      ? { id: school.id, name: school.name, slug: school.slug, usageStatus }
+      : null,
   });
 });
 

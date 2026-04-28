@@ -3,6 +3,7 @@ import OnboardingChecklist from "@/components/OnboardingChecklist";
 import DashboardCharts from "@/components/DashboardCharts";
 import ScenariosOverview from "@/components/ScenariosOverview";
 import PickSchoolEmptyState from "@/components/PickSchoolEmptyState";
+import UsageBanner from "@/components/UsageBanner";
 import { useAuth } from "@/hooks/useAuth";
 import { useViewingSchool } from "@/contexts/ViewingSchoolContext";
 import { fetchCalls } from "@/lib/api";
@@ -110,6 +111,7 @@ export default function Dashboard() {
           <PickSchoolEmptyState message="Pick a school to see its training dashboard." />
         ) : (
           <>
+        <UsageBanner />
         <OnboardingChecklist />
 
         {/* Stats row */}
