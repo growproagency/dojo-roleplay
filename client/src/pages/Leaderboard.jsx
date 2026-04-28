@@ -1,7 +1,6 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import { fetchLeaderboard, fetchScenarios, fetchAdminSchools } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
-import { useViewingSchool } from "@/contexts/ViewingSchoolContext";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -68,9 +67,9 @@ function StaffIdentity({ entry, align = "left", size = "sm" }) {
 
 export default function Leaderboard() {
   const { isGlobalAdmin } = useAuth();
-  const { viewingSchoolId } = useViewingSchool();
   const [range, setRange] = useState("all");
   const [scenario, setScenario] = useState("all");
+  const [schoolFilter, setSchoolFilter] = useState("all");
 
   const { data: scenarios } = useQuery({
     queryKey: ["scenarios"],
@@ -84,17 +83,17 @@ export default function Leaderboard() {
   });
 
   const schoolNameById = new Map((schools ?? []).map((s) => [s.id, s.name]));
-  // Show the School column only when the global admin is in platform view
-  // (no specific school picked via the sidebar switcher).
-  const showSchoolColumn = isGlobalAdmin && viewingSchoolId == null;
+  // Show the School column when the global admin is viewing all schools.
+  const showSchoolColumn = isGlobalAdmin && schoolFilter === "all";
 
   const filters = {
     ...(range !== "all" && { range }),
     ...(scenario !== "all" && { scenario }),
+    ...(isGlobalAdmin && schoolFilter !== "all" && { schoolId: schoolFilter }),
   };
 
   const { data, isLoading } = useQuery({
-    queryKey: ["leaderboard", range, scenario, viewingSchoolId ?? "all"],
+    queryKey: ["leaderboard", range, scenario, schoolFilter],
     queryFn: () => fetchLeaderboard(filters),
   });
 
@@ -198,6 +197,19 @@ export default function Leaderboard() {
                       ))}
                     </SelectContent>
                   </Select>
+                  {isGlobalAdmin && (
+                    <Select value={schoolFilter} onValueChange={setSchoolFilter}>
+                      <SelectTrigger className="w-full sm:w-52">
+                        <SelectValue placeholder="All schools" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All schools</SelectItem>
+                        {(schools ?? []).map((s) => (
+                          <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
                 </div>
 
                 {!data || data.length === 0 ? (

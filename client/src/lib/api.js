@@ -61,13 +61,15 @@ export const fetchLeaderboard = (params = {}) => {
   const qs = new URLSearchParams();
   if (params.scenario) qs.set("scenario", params.scenario);
   if (params.range) qs.set("range", params.range);
+  if (params.schoolId) qs.set("schoolId", params.schoolId);
   const query = qs.toString();
   return apiFetch(`/leaderboard${query ? `?${query}` : ""}`);
 };
-export const fetchUsage = (params) => {
+export const fetchUsage = (params = {}) => {
   const qs = new URLSearchParams();
   if (params.fromDate) qs.set("fromDate", params.fromDate);
   if (params.toDate) qs.set("toDate", params.toDate);
+  if (params.schoolId) qs.set("schoolId", params.schoolId);
   const query = qs.toString();
   return apiFetch(`/admin/usage${query ? `?${query}` : ""}`);
 };

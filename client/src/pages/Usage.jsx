@@ -1,8 +1,14 @@
 import { fetchUsage, fetchAdminSchools } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
-import { useViewingSchool } from "@/contexts/ViewingSchoolContext";
 import { useLocation } from "wouter";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useEffect, useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -91,10 +97,10 @@ const PRESET_LABELS = {
 
 export default function Usage() {
   const { user, isGlobalAdmin, loading: authLoading } = useAuth();
-  const { viewingSchoolId } = useViewingSchool();
   const [, setLocation] = useLocation();
   const [preset, setPreset] = useState("all");
   const [showPresets, setShowPresets] = useState(false);
+  const [schoolFilter, setSchoolFilter] = useState("all");
 
   useEffect(() => {
     if (!authLoading && !isGlobalAdmin) {
@@ -105,8 +111,8 @@ export default function Usage() {
   const dateRange = useMemo(() => getDateRange(preset), [preset]);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["usage", dateRange, viewingSchoolId ?? "platform"],
-    queryFn: () => fetchUsage(dateRange),
+    queryKey: ["usage", dateRange, schoolFilter],
+    queryFn: () => fetchUsage({ ...dateRange, schoolId: schoolFilter }),
     enabled: !!user && isGlobalAdmin,
   });
 
@@ -115,10 +121,6 @@ export default function Usage() {
     queryFn: fetchAdminSchools,
     enabled: !!user && isGlobalAdmin,
   });
-  const viewingSchoolName =
-    viewingSchoolId == null
-      ? null
-      : (schools ?? []).find((s) => s.id === viewingSchoolId)?.name ?? `School #${viewingSchoolId}`;
 
   const summary = data?.summary;
   const byUser = data?.byUser ?? [];
@@ -132,19 +134,24 @@ export default function Usage() {
         {/* Header */}
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-2xl font-bold tracking-tight">Usage & Billing</h1>
-              <Badge variant="secondary" className="text-xs">
-                {viewingSchoolName ?? "All schools"}
-              </Badge>
-            </div>
+            <h1 className="text-2xl font-bold tracking-tight">Usage & Billing</h1>
             <p className="text-muted-foreground text-sm mt-1">
-              Track call minutes, estimated costs, and per-user activity.
-              {viewingSchoolId == null
-                ? " Showing aggregate across every school — pick a specific school in the sidebar to scope down."
-                : " Pick \"Platform view\" in the sidebar to see all schools combined."}
+              Track call minutes, estimated costs, and per-user activity. Filter by school below.
             </p>
           </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* School filter — independent of the sidebar's operating context */}
+            <Select value={schoolFilter} onValueChange={setSchoolFilter}>
+              <SelectTrigger className="w-52 h-9 text-sm bg-background">
+                <SelectValue placeholder="All schools" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All schools</SelectItem>
+                {(schools ?? []).map((s) => (
+                  <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           {/* Date range picker */}
           <div className="relative">
             <Button
@@ -170,6 +177,7 @@ export default function Usage() {
                 ))}
               </div>
             )}
+          </div>
           </div>
         </div>
 
