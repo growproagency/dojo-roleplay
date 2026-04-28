@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { requireUser, effectiveSchoolId } from "../middleware/auth.js";
+import { requireUser } from "../middleware/auth.js";
 import { getLeaderboard } from "../db.js";
 
 const router = Router();
@@ -9,15 +9,23 @@ function isGlobalAdmin(user) {
 }
 
 // GET /api/leaderboard — get staff rankings
-//   Staff/school admin: scoped to their own school (schoolId required)
-//   Global admin: scoped to the school they're currently "viewing"
-//                 (X-Viewing-School-Id header). No viewing school → platform-wide.
+//   Staff/school admin: always scoped to their own schoolId (header is ignored).
+//   Global admin: scoped to ?schoolId query param.
+//                 schoolId omitted or "all" → platform-wide aggregate.
+//                 The in-page School filter is the source of truth — sidebar
+//                 viewing context does not affect this analytical view.
 router.get("/", requireUser, async (req, res) => {
   try {
     const user = req.user;
-    const schoolId = effectiveSchoolId(req);
+    let schoolId = null;
 
-    if (!isGlobalAdmin(user) && !schoolId) return res.json([]);
+    if (isGlobalAdmin(user)) {
+      const raw = req.query.schoolId;
+      schoolId = raw && raw !== "all" ? parseInt(raw, 10) : null;
+    } else {
+      if (!user.schoolId) return res.json([]);
+      schoolId = user.schoolId;
+    }
 
     const scenario = typeof req.query.scenario === "string" && req.query.scenario ? req.query.scenario : undefined;
     const range = req.query.range; // "7d" | "30d" | "90d" | "all"
