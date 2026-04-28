@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { z } from "zod/v4";
-import { requireGlobalAdmin } from "../middleware/auth.js";
+import { requireGlobalAdmin, effectiveSchoolId } from "../middleware/auth.js";
 import {
   getUsageSummary,
   getUsageByUser,
@@ -31,12 +31,14 @@ router.use(requireGlobalAdmin);
 // Usage
 // ============================================
 
-// GET /api/admin/usage?fromDate=X&toDate=Y&schoolId=N
+// GET /api/admin/usage?fromDate=X&toDate=Y
+//   Scoped to the school the global admin is currently viewing (X-Viewing-School-Id header).
+//   Platform view (no school selected) → aggregate across all schools.
 router.get("/usage", async (req, res) => {
   try {
     const fromDate = typeof req.query.fromDate === "string" ? new Date(req.query.fromDate) : undefined;
     const toDate = typeof req.query.toDate === "string" ? new Date(req.query.toDate) : undefined;
-    const schoolId = req.query.schoolId ? parseInt(req.query.schoolId, 10) : null;
+    const schoolId = effectiveSchoolId(req); // null = platform-wide
 
     const [summary, byUser] = await Promise.all([
       getUsageSummary(fromDate, toDate, schoolId),

@@ -1,6 +1,7 @@
-import { fetchUsage } from "@/lib/api";
+import { fetchUsage, fetchAdminSchools } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
+import { useViewingSchool } from "@/contexts/ViewingSchoolContext";
 import { useLocation } from "wouter";
 import { useEffect, useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -90,6 +91,7 @@ const PRESET_LABELS = {
 
 export default function Usage() {
   const { user, isGlobalAdmin, loading: authLoading } = useAuth();
+  const { viewingSchoolId } = useViewingSchool();
   const [, setLocation] = useLocation();
   const [preset, setPreset] = useState("all");
   const [showPresets, setShowPresets] = useState(false);
@@ -103,10 +105,20 @@ export default function Usage() {
   const dateRange = useMemo(() => getDateRange(preset), [preset]);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["usage", dateRange],
+    queryKey: ["usage", dateRange, viewingSchoolId ?? "platform"],
     queryFn: () => fetchUsage(dateRange),
     enabled: !!user && isGlobalAdmin,
   });
+
+  const { data: schools } = useQuery({
+    queryKey: ["admin-schools"],
+    queryFn: fetchAdminSchools,
+    enabled: !!user && isGlobalAdmin,
+  });
+  const viewingSchoolName =
+    viewingSchoolId == null
+      ? null
+      : (schools ?? []).find((s) => s.id === viewingSchoolId)?.name ?? `School #${viewingSchoolId}`;
 
   const summary = data?.summary;
   const byUser = data?.byUser ?? [];
@@ -120,9 +132,17 @@ export default function Usage() {
         {/* Header */}
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Usage & Billing</h1>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-2xl font-bold tracking-tight">Usage & Billing</h1>
+              <Badge variant="secondary" className="text-xs">
+                {viewingSchoolName ?? "All schools"}
+              </Badge>
+            </div>
             <p className="text-muted-foreground text-sm mt-1">
               Track call minutes, estimated costs, and per-user activity.
+              {viewingSchoolId == null
+                ? " Showing aggregate across every school — pick a specific school in the sidebar to scope down."
+                : " Pick \"Platform view\" in the sidebar to see all schools combined."}
             </p>
           </div>
           {/* Date range picker */}
