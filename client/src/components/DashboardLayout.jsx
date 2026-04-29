@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/sidebar";
 import { getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { LayoutDashboard, LogOut, PanelLeft, Phone, Settings, Trophy, BarChart3, Sun, Moon, Users, User, School, Drama } from "lucide-react";
+import { LayoutDashboard, LogOut, PanelLeft, Phone, Settings, Trophy, BarChart3, Sun, Moon, Users, User, School, Drama, Settings2 } from "lucide-react";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -42,6 +42,7 @@ const menuItems = [
   { icon: School, label: "All Schools", path: "/admin/schools", requires: "globalAdmin" },
   { icon: Drama, label: "Scenarios", path: "/admin/scenarios", requires: "globalAdmin" },
   { icon: BarChart3, label: "Usage & Billing", path: "/usage", requires: "globalAdmin" },
+  { icon: Settings2, label: "Platform Settings", path: "/admin/platform-settings", requires: "globalAdmin" },
 ];
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";

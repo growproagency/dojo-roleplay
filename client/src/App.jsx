@@ -18,6 +18,7 @@ import Profile from "./pages/Profile";
 import AdminSchools from "./pages/AdminSchools";
 import AdminSchoolDetail from "./pages/AdminSchoolDetail";
 import CustomScenarios from "./pages/CustomScenarios";
+import PlatformSettings from "./pages/PlatformSettings";
 import ResetPassword from "./pages/ResetPassword";
 import CallWidget from "./components/CallWidget";
 import NameRequiredDialog from "./components/NameRequiredDialog";
@@ -38,6 +39,7 @@ function Router() {
       <Route path="/admin/schools" component={AdminSchools} />
       <Route path="/admin/schools/:id" component={AdminSchoolDetail} />
       <Route path="/admin/scenarios" component={CustomScenarios} />
+      <Route path="/admin/platform-settings" component={PlatformSettings} />
       <Route path="/reset-password" component={ResetPassword} />
       <Route path="/invite/:token" component={InviteAccept} />
       <Route path="/404" component={NotFound} />
