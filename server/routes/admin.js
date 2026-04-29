@@ -368,10 +368,20 @@ router.put("/users/:id/school", async (req, res) => {
       return res.status(400).json({ message: "Invalid data", errors: parsed.error.issues });
     }
 
-    // If assigning to a school, verify school exists
+    // If assigning to a school, verify school exists and that the target isn't
+    // a platform admin. Global admins should never be school members — they
+    // operate via the sidebar school switcher. Demote first if intentional.
     if (parsed.data.schoolId) {
       const school = await getSchoolById(parsed.data.schoolId);
       if (!school) return res.status(404).json({ message: "School not found" });
+
+      const target = await getUserById(userId).catch(() => null);
+      if (!target) return res.status(404).json({ message: "User not found" });
+      if (target.role === "global_admin" || target.role === "admin") {
+        return res.status(400).json({
+          message: "Global admins cannot be assigned to a school. Change their role first if intended.",
+        });
+      }
     }
 
     await setUserSchool(userId, parsed.data.schoolId);

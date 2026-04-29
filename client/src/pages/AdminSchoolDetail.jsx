@@ -152,7 +152,13 @@ export default function AdminSchoolDetail() {
     enabled: isGlobalAdmin && showAddExisting,
   });
 
-  const unattachedUsers = (allUsers || []).filter(u => !u.schoolId);
+  // Candidates for "Add existing user": users not currently in any school AND
+  // not global admins. Global admins have school_id = null by design (they
+  // operate via the sidebar switcher) so they would otherwise appear here and
+  // get demoted by the role-change step in the add-mutation.
+  const unattachedUsers = (allUsers || []).filter(
+    (u) => !u.schoolId && u.role !== "global_admin" && u.role !== "admin"
+  );
 
   const addExistingMutation = useMutation({
     mutationFn: async ({ userId, role }) => {
