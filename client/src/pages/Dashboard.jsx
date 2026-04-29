@@ -4,6 +4,7 @@ import DashboardCharts from "@/components/DashboardCharts";
 import ScenariosOverview from "@/components/ScenariosOverview";
 import PickSchoolEmptyState from "@/components/PickSchoolEmptyState";
 import UsageBanner from "@/components/UsageBanner";
+import UsageStrip from "@/components/UsageStrip";
 import { useAuth } from "@/hooks/useAuth";
 import { useViewingSchool } from "@/contexts/ViewingSchoolContext";
 import { fetchCalls } from "@/lib/api";
@@ -102,9 +103,12 @@ export default function Dashboard() {
     <DashboardLayout>
       <div className="max-w-6xl mx-auto space-y-8 py-2">
         {/* Header */}
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Training Dashboard</h1>
-          <p className="text-muted-foreground mt-1">Practice enrollment calls and review your performance.</p>
+        <div className="space-y-3">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">Training Dashboard</h1>
+            <p className="text-muted-foreground mt-1">Practice enrollment calls and review your performance.</p>
+          </div>
+          <UsageStrip />
         </div>
 
         {needsSchool ? (
