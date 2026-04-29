@@ -161,8 +161,8 @@ export default function PlatformSettings() {
               <div className="space-y-1.5">
                 <Label htmlFor="model">Scoring model</Label>
                 <Select value={model} onValueChange={setModel} disabled={isLoading}>
-                  <SelectTrigger id="model" className="max-w-md">
-                    <SelectValue />
+                  <SelectTrigger id="model" className="w-full max-w-md">
+                    <SelectValue placeholder="Use server default" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value={SERVER_DEFAULT}>
