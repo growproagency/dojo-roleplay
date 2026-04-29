@@ -609,15 +609,23 @@ export async function getUsageSummary(fromDate, toDate, schoolId) {
   }
 
   const totalMinutes = Math.round((totalSeconds / 60) * 10) / 10;
+  const settings = await getPlatformSettings();
+  const markupMultiplier = 1 + (settings?.markupPercent ?? 0) / 100;
+  const billedCallCost = callCostUsd * markupMultiplier;
+  const billedScoringCost = scoringCostUsd * markupMultiplier;
 
   return {
     totalCalls: allRows.length,
     completedCalls,
     totalSeconds,
     totalMinutes,
-    callCostUsd: round2(callCostUsd),
-    scoringCostUsd: round2(scoringCostUsd),
-    estimatedCostUsd: round2(callCostUsd + scoringCostUsd),
+    markupPercent: settings?.markupPercent ?? 0,
+    rawCallCostUsd: round2(callCostUsd),
+    rawScoringCostUsd: round2(scoringCostUsd),
+    rawCostUsd: round2(callCostUsd + scoringCostUsd),
+    callCostUsd: round2(billedCallCost),
+    scoringCostUsd: round2(billedScoringCost),
+    estimatedCostUsd: round2(billedCallCost + billedScoringCost),
     byScenario: Array.from(scenarioMap.entries())
       .map(([scenario, v]) => ({ scenario, calls: v.calls, seconds: v.seconds, minutes: Math.round((v.seconds / 60) * 10) / 10 }))
       .sort((a, b) => b.seconds - a.seconds),
@@ -678,12 +686,17 @@ export async function getUsageByUser(fromDate, toDate, schoolId) {
     if (!entry.lastCallAt || c.created_at > entry.lastCallAt) entry.lastCallAt = c.created_at;
   }
 
+  const settings = await getPlatformSettings();
+  const markupMultiplier = 1 + (settings?.markupPercent ?? 0) / 100;
+
   return Array.from(userMap.entries())
     .map(([userId, e]) => {
       const totalMinutes = Math.round((e.totalSeconds / 60) * 10) / 10;
       const avgScore = e.scores.length > 0
         ? Math.round((e.scores.reduce((a, b) => a + b, 0) / e.scores.length) * 10) / 10
         : null;
+      const billedCall = e.callCost * markupMultiplier;
+      const billedScoring = e.scoringCost * markupMultiplier;
       return {
         userId,
         userName: e.userName,
@@ -692,9 +705,9 @@ export async function getUsageByUser(fromDate, toDate, schoolId) {
         completedCalls: e.completedCalls,
         totalSeconds: e.totalSeconds,
         totalMinutes,
-        callCostUsd: round2(e.callCost),
-        scoringCostUsd: round2(e.scoringCost),
-        estimatedCostUsd: round2(e.callCost + e.scoringCost),
+        callCostUsd: round2(billedCall),
+        scoringCostUsd: round2(billedScoring),
+        estimatedCostUsd: round2(billedCall + billedScoring),
         avgScore,
         lastCallAt: e.lastCallAt,
       };
@@ -715,6 +728,58 @@ export async function getAllSchools() {
   return (data || []).map(toSchoolCamel);
 }
 
+// ---- Platform Settings (single-row) ----
+
+function toPlatformSettingsCamel(row) {
+  if (!row) return undefined;
+  return {
+    id: row.id,
+    markupPercent: row.markup_percent != null ? Number(row.markup_percent) : 0,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+let _platformSettingsCache = null;
+let _platformSettingsCacheAt = 0;
+const PLATFORM_SETTINGS_TTL_MS = 30 * 1000; // 30s — these change rarely
+
+export async function getPlatformSettings() {
+  // Tiny in-memory cache: this gets called by every cap check + every usage
+  // aggregation. 30s freshness is plenty since markup changes are rare.
+  const now = Date.now();
+  if (_platformSettingsCache && now - _platformSettingsCacheAt < PLATFORM_SETTINGS_TTL_MS) {
+    return _platformSettingsCache;
+  }
+  const sb = getSupabase();
+  if (!sb) return { id: 1, markupPercent: 0 };
+  const { data, error } = await sb.from("platform_settings").select("*").eq("id", 1).maybeSingle();
+  if (error) {
+    console.error("[Database] getPlatformSettings error:", error);
+    return { id: 1, markupPercent: 0 };
+  }
+  const result = toPlatformSettingsCamel(data) ?? { id: 1, markupPercent: 0 };
+  _platformSettingsCache = result;
+  _platformSettingsCacheAt = now;
+  return result;
+}
+
+export async function updatePlatformSettings(data) {
+  const sb = getSupabase();
+  if (!sb) throw new Error("Supabase not available");
+  const row = { id: 1, updated_at: new Date().toISOString() };
+  if (data.markupPercent !== undefined) row.markup_percent = data.markupPercent;
+  const { data: result, error } = await sb
+    .from("platform_settings")
+    .upsert(row, { onConflict: "id" })
+    .select("*")
+    .single();
+  if (error) throw error;
+  // Invalidate the cache so the next read sees the new value immediately
+  _platformSettingsCache = null;
+  return toPlatformSettingsCamel(result);
+}
+
 // Returns every school with their cumulative usage attached. One row per school.
 // Used by the global-admin Usage & Billing schools-overview table.
 //   { ...school, totalCallCostUsd, totalScoringCostUsd, totalCostUsd, totalCalls, totalSeconds, totalMinutes, percentUsed, atCap }
@@ -722,15 +787,18 @@ export async function getSchoolsWithUsage() {
   const sb = getSupabase();
   if (!sb) return [];
 
-  const [schoolsRes, callsRes, scoringRes] = await Promise.all([
+  const [schoolsRes, callsRes, scoringRes, settings] = await Promise.all([
     sb.from("schools").select("*").order("created_at", { ascending: true }),
     sb.from("calls").select("school_id, duration_seconds, cost_usd"),
     sb.from("scorecards").select("call_id, cost_usd, calls!inner(school_id)"),
+    getPlatformSettings(),
   ]);
 
   if (schoolsRes.error) { console.error("[Database] getSchoolsWithUsage schools error:", schoolsRes.error); return []; }
   const callRows = callsRes.data || [];
   const scoringRows = scoringRes.data || [];
+  const markupPercent = settings?.markupPercent ?? 0;
+  const markupMultiplier = 1 + markupPercent / 100;
 
   // Aggregate calls by school
   const callTotals = new Map(); // schoolId → { cost, seconds, count }
@@ -755,46 +823,57 @@ export async function getSchoolsWithUsage() {
     const school = toSchoolCamel(row);
     const callT = callTotals.get(school.id) ?? { cost: 0, seconds: 0, count: 0 };
     const scoringCost = scoringTotals.get(school.id) ?? 0;
-    const totalCostUsd = round2(callT.cost + scoringCost);
+    const rawCost = callT.cost + scoringCost;
+    const billed = rawCost * markupMultiplier;
     const cap = school.usageCapUsd;
-    const percentUsed = cap != null && cap > 0 ? Math.round((totalCostUsd / cap) * 100) : null;
+    const percentUsed = cap != null && cap > 0 ? Math.round((billed / cap) * 100) : null;
     return {
       ...school,
-      totalCallCostUsd: round2(callT.cost),
-      totalScoringCostUsd: round2(scoringCost),
-      totalCostUsd,
+      // Raw vendor cost (what we actually pay)
+      rawCallCostUsd: round2(callT.cost),
+      rawScoringCostUsd: round2(scoringCost),
+      rawCostUsd: round2(rawCost),
+      // Billed cost (what the client owes after markup) — displayed in the UI
+      totalCostUsd: round2(billed),
+      markupPercent,
       totalCalls: callT.count,
       totalSeconds: callT.seconds,
       totalMinutes: Math.round((callT.seconds / 60) * 10) / 10,
       percentUsed,
-      atCap: cap != null && totalCostUsd >= cap,
+      atCap: cap != null && billed >= cap,
     };
   });
 }
 
 // Lightweight cap check for enforcement points (session-token, phone webhook).
-// Returns { capUsd, totalCostUsd, atCap, percentUsed }. Null cap = unrestricted.
+// Returns { capUsd, rawCostUsd, totalCostUsd (billed), markupPercent, atCap, percentUsed }.
+// Cap is compared against BILLED cost (rawCost × (1 + markup/100)) so it tracks
+// what the client owes — same number the global admin sees in the UI.
 export async function getSchoolUsageStatus(schoolId) {
   const sb = getSupabase();
-  if (!sb || !schoolId) return { capUsd: null, totalCostUsd: 0, atCap: false, percentUsed: null };
+  if (!sb || !schoolId) return { capUsd: null, rawCostUsd: 0, totalCostUsd: 0, markupPercent: 0, atCap: false, percentUsed: null };
 
-  const [schoolRes, callsRes, scoringRes] = await Promise.all([
+  const [schoolRes, callsRes, scoringRes, settings] = await Promise.all([
     sb.from("schools").select("usage_cap_usd").eq("id", schoolId).single(),
     sb.from("calls").select("id, duration_seconds, cost_usd").eq("school_id", schoolId),
     // Scorecards are joined by call_id; pull just for this school's calls.
     sb.from("scorecards").select("cost_usd, calls!inner(school_id)").eq("calls.school_id", schoolId),
+    getPlatformSettings(),
   ]);
 
   const capUsd = schoolRes.data?.usage_cap_usd != null ? Number(schoolRes.data.usage_cap_usd) : null;
-  let total = 0;
-  for (const c of callsRes.data || []) total += effectiveCallCost(c);
+  let raw = 0;
+  for (const c of callsRes.data || []) raw += effectiveCallCost(c);
   for (const s of scoringRes.data || []) {
-    if (s.cost_usd != null) total += Number(s.cost_usd);
+    if (s.cost_usd != null) raw += Number(s.cost_usd);
   }
-  const totalCostUsd = round2(total);
-  const atCap = capUsd != null && totalCostUsd >= capUsd;
-  const percentUsed = capUsd != null && capUsd > 0 ? Math.round((totalCostUsd / capUsd) * 100) : null;
-  return { capUsd, totalCostUsd, atCap, percentUsed };
+  const markupPercent = settings?.markupPercent ?? 0;
+  const billed = raw * (1 + markupPercent / 100);
+  const rawCostUsd = round2(raw);
+  const totalCostUsd = round2(billed);
+  const atCap = capUsd != null && billed >= capUsd;
+  const percentUsed = capUsd != null && capUsd > 0 ? Math.round((billed / capUsd) * 100) : null;
+  return { capUsd, rawCostUsd, totalCostUsd, markupPercent, atCap, percentUsed };
 }
 
 export async function deleteSchool(id) {

@@ -104,6 +104,8 @@ export const deleteCustomScenario = (id) => apiFetch(`/scenarios/custom/${id}`, 
 // ---- Super admin ----
 export const fetchAdminSchools = () => apiFetch("/admin/schools");
 export const fetchSchoolsUsageOverview = () => apiFetch("/admin/schools/usage-overview");
+export const fetchPlatformSettings = () => apiFetch("/admin/platform-settings");
+export const updatePlatformSettings = (data) => apiFetch("/admin/platform-settings", { method: "PUT", body: JSON.stringify(data) });
 export const fetchAdminSchool = (id) => apiFetch(`/admin/schools/${id}`);
 export const createAdminSchool = (data) => apiFetch("/admin/schools", { method: "POST", body: JSON.stringify(data) });
 export const updateAdminSchool = (id, data) => apiFetch(`/admin/schools/${id}`, { method: "PUT", body: JSON.stringify(data) });

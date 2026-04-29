@@ -19,13 +19,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Pencil } from "lucide-react";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { useEffect, useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -346,55 +339,57 @@ export default function Usage() {
 
   return (
     <DashboardLayout>
-      <div className="p-6 space-y-6 max-w-6xl">
+      <div className="p-6 space-y-6 max-w-6xl mx-auto">
         {/* Header */}
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Usage & Billing</h1>
+            {schoolFilter !== "all" && (
+              <button
+                onClick={() => setSchoolFilter("all")}
+                className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1 mb-2"
+              >
+                ← All schools
+              </button>
+            )}
+            <h1 className="text-2xl font-bold tracking-tight">
+              {schoolFilter === "all"
+                ? "Usage & Billing"
+                : `Usage — ${(schools ?? []).find((s) => String(s.id) === schoolFilter)?.name ?? "School"}`}
+            </h1>
             <p className="text-muted-foreground text-sm mt-1">
-              Track call minutes, estimated costs, and per-user activity. Filter by school below.
+              {schoolFilter === "all"
+                ? "Cumulative spend per school. Click a row to drill into per-user detail."
+                : "Per-user activity, scenario breakdown, and monthly trend."}
             </p>
           </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            {/* School filter — independent of the sidebar's operating context */}
-            <Select value={schoolFilter} onValueChange={setSchoolFilter}>
-              <SelectTrigger className="w-52 h-9 text-sm bg-background">
-                <SelectValue placeholder="All schools" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All schools</SelectItem>
-                {(schools ?? []).map((s) => (
-                  <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          {/* Date range picker */}
-          <div className="relative">
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-2 bg-background"
-              onClick={() => setShowPresets(v => !v)}
-            >
-              <Calendar className="w-4 h-4" />
-              {PRESET_LABELS[preset]}
-              <ChevronDown className="w-3 h-3 opacity-60" />
-            </Button>
-            {showPresets && (
-              <div className="absolute right-0 top-full mt-1 z-20 bg-card border border-border rounded-lg shadow-lg py-1 min-w-[160px]">
-                {Object.keys(PRESET_LABELS).map(p => (
-                  <button
-                    key={p}
-                    className={`w-full text-left px-4 py-2 text-sm hover:bg-accent transition-colors ${preset === p ? "text-primary font-medium" : "text-foreground"}`}
-                    onClick={() => { setPreset(p); setShowPresets(false); }}
-                  >
-                    {PRESET_LABELS[p]}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-          </div>
+          {/* Date range picker — only meaningful inside a per-school detail view */}
+          {schoolFilter !== "all" && (
+            <div className="relative">
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2 bg-background"
+                onClick={() => setShowPresets(v => !v)}
+              >
+                <Calendar className="w-4 h-4" />
+                {PRESET_LABELS[preset]}
+                <ChevronDown className="w-3 h-3 opacity-60" />
+              </Button>
+              {showPresets && (
+                <div className="absolute right-0 top-full mt-1 z-20 bg-card border border-border rounded-lg shadow-lg py-1 min-w-40">
+                  {Object.keys(PRESET_LABELS).map(p => (
+                    <button
+                      key={p}
+                      className={`w-full text-left px-4 py-2 text-sm hover:bg-accent transition-colors ${preset === p ? "text-primary font-medium" : "text-foreground"}`}
+                      onClick={() => { setPreset(p); setShowPresets(false); }}
+                    >
+                      {PRESET_LABELS[p]}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Schools overview table — shown when no specific school is picked */}

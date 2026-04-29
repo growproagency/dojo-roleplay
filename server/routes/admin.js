@@ -14,6 +14,8 @@ import {
   getAllUsers,
   setUserSchool,
   updateUserRole,
+  getPlatformSettings,
+  updatePlatformSettings,
   deleteUser,
   getCallsBySchool,
   createInvite,
@@ -27,6 +29,42 @@ const router = Router();
 
 // All routes require global admin
 router.use(requireGlobalAdmin);
+
+// ============================================
+// Platform Settings (single-row, global config)
+// ============================================
+
+// GET /api/admin/platform-settings — current platform-level config
+router.get("/platform-settings", async (_req, res) => {
+  try {
+    const settings = await getPlatformSettings();
+    res.json(settings);
+  } catch (err) {
+    console.error("[Admin] platform-settings get error:", err);
+    res.status(500).json({ message: "Failed to fetch platform settings" });
+  }
+});
+
+// PUT /api/admin/platform-settings — update platform-level config
+const platformSettingsSchema = z.object({
+  // 0–500%: enough headroom for high-margin pricing without allowing typos
+  // like "5000" to silently brick everyone's caps.
+  markupPercent: z.number().min(0).max(500).optional(),
+});
+
+router.put("/platform-settings", async (req, res) => {
+  try {
+    const parsed = platformSettingsSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "Invalid platform settings", errors: parsed.error.issues });
+    }
+    const updated = await updatePlatformSettings(parsed.data);
+    res.json(updated);
+  } catch (err) {
+    console.error("[Admin] platform-settings update error:", err);
+    res.status(500).json({ message: "Failed to update platform settings" });
+  }
+});
 
 // ============================================
 // Usage
