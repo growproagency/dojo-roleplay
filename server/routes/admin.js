@@ -50,6 +50,12 @@ const platformSettingsSchema = z.object({
   // 0–500%: enough headroom for high-margin pricing without allowing typos
   // like "5000" to silently brick everyone's caps.
   markupPercent: z.number().min(0).max(500).optional(),
+  // Null = fall back to LLM_MODEL env var. The frontend constrains this to
+  // the keys in client OPENAI_PRICING; we accept any short string in case
+  // we add a model on the backend before the frontend ships.
+  defaultLlmModel: z.string().min(1).max(64).nullable().optional(),
+  // Null = no default cap (new schools start unrestricted).
+  defaultUsageCapUsd: z.number().min(0).max(100000).nullable().optional(),
 });
 
 router.put("/platform-settings", async (req, res) => {

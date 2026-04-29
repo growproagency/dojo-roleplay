@@ -735,6 +735,8 @@ function toPlatformSettingsCamel(row) {
   return {
     id: row.id,
     markupPercent: row.markup_percent != null ? Number(row.markup_percent) : 0,
+    defaultLlmModel: row.default_llm_model ?? null,
+    defaultUsageCapUsd: row.default_usage_cap_usd != null ? Number(row.default_usage_cap_usd) : null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -769,6 +771,8 @@ export async function updatePlatformSettings(data) {
   if (!sb) throw new Error("Supabase not available");
   const row = { id: 1, updated_at: new Date().toISOString() };
   if (data.markupPercent !== undefined) row.markup_percent = data.markupPercent;
+  if (data.defaultLlmModel !== undefined) row.default_llm_model = data.defaultLlmModel;
+  if (data.defaultUsageCapUsd !== undefined) row.default_usage_cap_usd = data.defaultUsageCapUsd;
   const { data: result, error } = await sb
     .from("platform_settings")
     .upsert(row, { onConflict: "id" })
@@ -990,6 +994,11 @@ export async function createSchool({ name, slug, ownerUserId }) {
   const row = { name };
   if (slug) row.slug = slug;
   if (ownerUserId) row.owner_user_id = ownerUserId;
+  // Apply the platform-wide default cap to new schools (null = unrestricted).
+  const settings = await getPlatformSettings().catch(() => null);
+  if (settings?.defaultUsageCapUsd != null) {
+    row.usage_cap_usd = settings.defaultUsageCapUsd;
+  }
   const { data, error } = await sb.from("schools").insert(row).select("*").single();
   if (error) throw error;
   return toSchoolCamel(data);
