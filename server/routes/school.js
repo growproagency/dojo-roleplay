@@ -89,8 +89,18 @@ router.delete("/members/:userId", requireSchoolAdmin, async (req, res) => {
     const target = members.find(m => m.id === userId);
     if (!target) return res.status(404).json({ message: "Member not found in your school" });
 
-    // Set their school_id to NULL (keeps user account, just unassigns them)
-    await setUserSchool(userId, null, "staff");
+    // Refuse to touch platform admins. A school admin must not be able to
+    // demote a global admin by removing them from a school.
+    if (target.role === "global_admin" || target.role === "admin") {
+      return res.status(403).json({
+        message: "This member is a platform admin and cannot be removed by a school admin. Contact your platform administrator.",
+      });
+    }
+
+    // Unassign from the school. Demote school_admin → staff so they can be
+    // re-invited cleanly elsewhere; preserve any other role as-is.
+    const newRole = target.role === "school_admin" ? "staff" : target.role;
+    await setUserSchool(userId, null, newRole);
     res.json({ success: true });
   } catch (err) {
     console.error("[School] remove member error:", err);
