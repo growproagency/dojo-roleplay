@@ -202,8 +202,12 @@ export default function AdminSchoolDetail() {
   };
 
   const openUnassignModal = (member) => {
-    if (member.id === currentUser?.id) {
-      toast.error("You cannot remove yourself");
+    // Global admins can safely unassign themselves — they keep platform access
+    // even without a school. Block the action for everyone else (would lock
+    // them out of the school they're managing).
+    const isGlobal = member.role === "global_admin" || member.role === "admin";
+    if (member.id === currentUser?.id && !isGlobal) {
+      toast.error("You cannot remove yourself from this school");
       return;
     }
     setUnassignTarget(member);
@@ -514,6 +518,11 @@ export default function AdminSchoolDetail() {
               <div className="divide-y divide-border">
                 {members.map((member) => {
                   const isSelf = member.id === currentUser?.id;
+                  // Global admins can unassign themselves from a school without
+                  // losing platform access, so the "remove from school" button
+                  // shouldn't be locked for their own row.
+                  const isSelfGlobal =
+                    isSelf && (member.role === "global_admin" || member.role === "admin");
                   return (
                     <div key={member.id} className="flex items-center justify-between gap-3 py-3">
                       <div className="min-w-0 flex-1">
@@ -565,7 +574,7 @@ export default function AdminSchoolDetail() {
                           variant="ghost"
                           size="sm"
                           onClick={() => openUnassignModal(member)}
-                          disabled={isSelf}
+                          disabled={isSelf && !isSelfGlobal}
                           title="Remove from school"
                           className="text-muted-foreground hover:text-foreground"
                         >
