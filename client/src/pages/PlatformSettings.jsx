@@ -33,9 +33,17 @@ export default function PlatformSettings() {
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
 
-  const [markup, setMarkup] = useState("");
-  const [model, setModel] = useState(SERVER_DEFAULT);
-  const [defaultCap, setDefaultCap] = useState("");
+  // Read cached query data eagerly so form fields already reflect the saved
+  // values on the first render of a remount (no flash through defaults).
+  const cached = queryClient.getQueryData(["platform-settings"]);
+
+  const [markup, setMarkup] = useState(() =>
+    cached?.markupPercent != null ? String(cached.markupPercent) : ""
+  );
+  const [model, setModel] = useState(() => cached?.defaultLlmModel ?? SERVER_DEFAULT);
+  const [defaultCap, setDefaultCap] = useState(() =>
+    cached?.defaultUsageCapUsd != null ? String(cached.defaultUsageCapUsd) : ""
+  );
 
   useEffect(() => {
     if (!authLoading && !isGlobalAdmin) setLocation("/dashboard");
@@ -47,12 +55,13 @@ export default function PlatformSettings() {
     enabled: isGlobalAdmin,
   });
 
+  // Re-sync when settings change (initial fetch, after a save, etc.)
   useEffect(() => {
     if (!settings) return;
     setMarkup(String(settings.markupPercent ?? 0));
     setModel(settings.defaultLlmModel ?? SERVER_DEFAULT);
     setDefaultCap(settings.defaultUsageCapUsd != null ? String(settings.defaultUsageCapUsd) : "");
-  }, [settings]);
+  }, [settings?.markupPercent, settings?.defaultLlmModel, settings?.defaultUsageCapUsd]);
 
   const saveMutation = useMutation({
     mutationFn: (data) => updatePlatformSettings(data),
@@ -162,7 +171,11 @@ export default function PlatformSettings() {
                 <Label htmlFor="model">Scoring model</Label>
                 <Select value={model} onValueChange={setModel} disabled={isLoading}>
                   <SelectTrigger id="model" className="w-full max-w-md">
-                    <SelectValue placeholder="Use server default" />
+                    <SelectValue placeholder="Use server default">
+                      {model === SERVER_DEFAULT
+                        ? "Use server default (LLM_MODEL env var)"
+                        : MODEL_OPTIONS.find((m) => m.value === model)?.label ?? model}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value={SERVER_DEFAULT}>
