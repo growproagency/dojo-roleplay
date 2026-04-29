@@ -880,19 +880,56 @@ export async function getSchoolUsageStatus(schoolId) {
   return { capUsd, rawCostUsd, totalCostUsd, markupPercent, atCap, percentUsed };
 }
 
+// Hard-delete a school and ALL of its tenant data, in dependency order.
+// Used for GDPR/CCPA "delete my data" requests and for cleaning up test schools.
+// FK constraints in the DB don't all cascade (e.g. calls.school_id has no
+// ON DELETE clause), so we explicitly delete dependents bottom-up.
 export async function deleteSchool(id) {
   const sb = getSupabase();
   if (!sb) throw new Error("Supabase not available");
-  // Unassign all users from this school first
+
+  // 1. Fetch this school's call ids so we can delete their scorecards.
+  //    scorecards.call_id has no ON DELETE → must be cleared before calls.
+  const { data: callRows, error: callIdErr } = await sb
+    .from("calls")
+    .select("id")
+    .eq("school_id", id);
+  if (callIdErr) throw callIdErr;
+  const callIds = (callRows ?? []).map((r) => r.id);
+
+  // 2. Delete scorecards for those calls.
+  if (callIds.length > 0) {
+    const { error: scErr } = await sb.from("scorecards").delete().in("call_id", callIds);
+    if (scErr) throw scErr;
+  }
+
+  // 3. Delete calls. (calls.school_id has no ON DELETE → must delete manually.)
+  const { error: callsErr } = await sb.from("calls").delete().eq("school_id", id);
+  if (callsErr) throw callsErr;
+
+  // 4. Delete phone_call_attempts for the school. The FK is ON DELETE SET NULL,
+  //    but for full data deletion we want to remove the attempts (they include
+  //    caller phone numbers). Best-effort — log but don't fail the whole delete.
+  const { error: phoneErr } = await sb
+    .from("phone_call_attempts")
+    .delete()
+    .eq("school_id", id);
+  if (phoneErr) console.error("[Database] deleteSchool phone_call_attempts cleanup:", phoneErr);
+
+  // 5. Unassign all users from this school. Demote them to "staff" so they
+  //    can be re-invited cleanly to another school.
   const { error: userErr } = await sb
     .from("users")
     .update({ school_id: null, role: "staff" })
     .eq("school_id", id);
   if (userErr) throw userErr;
-  // Delete invites
+
+  // 6. Delete pending invites (FK is CASCADE, but be explicit).
   const { error: inviteErr } = await sb.from("school_invites").delete().eq("school_id", id);
   if (inviteErr) console.error("[Database] deleteSchool invites cleanup:", inviteErr);
-  // Delete the school
+
+  // 7. Delete the school itself. custom_scenarios with school_id will cascade
+  //    via their ON DELETE CASCADE constraint.
   const { error } = await sb.from("schools").delete().eq("id", id);
   if (error) throw error;
 }

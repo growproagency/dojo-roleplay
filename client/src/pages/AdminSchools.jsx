@@ -236,10 +236,23 @@ export default function AdminSchools() {
           <DialogHeader>
             <DialogTitle className="text-destructive">Delete school</DialogTitle>
             <DialogDescription>
-              This will permanently delete <strong>{deleteTarget?.name}</strong> and unassign all its members. This action cannot be undone.
+              This permanently deletes <strong>{deleteTarget?.name}</strong> and all of its tenant data. This action cannot be undone.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 py-2">
+            <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-xs text-muted-foreground space-y-1">
+              <p className="font-medium text-foreground">What gets deleted:</p>
+              <ul className="list-disc pl-4 space-y-0.5">
+                <li>All call recordings, transcripts, and scorecards for this school</li>
+                <li>All inbound phone-call attempts logged for this school</li>
+                <li>Pending staff invites</li>
+                <li>School-specific custom scenarios, settings, and the usage cap</li>
+              </ul>
+              <p className="pt-1">
+                Members keep their accounts — they'll be unassigned from this school and demoted to "staff".
+                Re-invite them elsewhere to restore access.
+              </p>
+            </div>
             <p className="text-sm text-muted-foreground">
               Type <span className="font-mono font-semibold text-foreground">delete school</span> to confirm:
             </p>
