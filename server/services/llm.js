@@ -1,4 +1,5 @@
 import { ENV } from "../config/env.js";
+import { getPlatformSettings } from "../db.js";
 
 const ensureArray = (value) => (Array.isArray(value) ? value : [value]);
 
@@ -100,8 +101,13 @@ export async function invokeLLM(params) {
     response_format,
   } = params;
 
+  // Prefer the model set in platform_settings (DB) so admins can flip models
+  // without a redeploy. Falls back to LLM_MODEL env var, then "gpt-4o-mini".
+  const settings = await getPlatformSettings().catch(() => null);
+  const model = settings?.defaultLlmModel || ENV.llmModel;
+
   const payload = {
-    model: ENV.llmModel,
+    model,
     messages: messages.map(normalizeMessage),
     max_tokens: 4096,
   };
