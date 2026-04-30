@@ -512,30 +512,48 @@ async function handleHandoffRequest(message, res) {
 
   // Inbound phone gate: with a static inbound assistant we can't reject at
   // assistant-request time, so caller-ID whitelist + rate limit + school cap
-  // are enforced here instead. Returning { error } makes Vapi end the call
-  // without performing the handoff.
+  // are enforced here instead. We return a rejection-assistant destination so
+  // the caller actually HEARS the reason before the call ends.
   const callerNumber = call?.customer?.number;
   if (call?.type === "inboundPhoneCall" && callerNumber) {
+    const rejectAtHandoff = (assistantName, spokenMessage) => ({
+      destination: {
+        type: "assistant",
+        assistantName,
+        description: assistantName,
+        assistant: buildRejectionAssistant(spokenMessage),
+      },
+    });
+
     const phoneUser = await getUserByPhoneNumber(callerNumber).catch(() => null);
 
     if (!phoneUser) {
       await logPhoneCallAttempt({ callerNumber, vapiCallId, outcome: "rejected_unknown" }).catch(() => {});
       console.warn(`[Vapi] handoff rejected: unknown caller ${callerNumber}`);
-      return res.json({ error: "Caller not registered with Dojo Roleplay" });
+      return res.json(rejectAtHandoff(
+        "Unregistered Caller",
+        "Sorry, this number isn't registered with Dojo Roleplay. Please add your phone number in your account settings and try again. Goodbye."
+      ));
     }
 
     const isGlobalAdmin = phoneUser.role === "global_admin" || phoneUser.role === "admin";
     if (!phoneUser.schoolId && !isGlobalAdmin) {
       await logPhoneCallAttempt({ callerNumber, vapiCallId, userId: phoneUser.id, outcome: "rejected_unknown" }).catch(() => {});
       console.warn(`[Vapi] handoff rejected: user ${phoneUser.id} not assigned to a school`);
-      return res.json({ error: "User not assigned to a school" });
+      return res.json(rejectAtHandoff(
+        "No School Assigned",
+        "Sorry, your account isn't assigned to a school yet. Please contact your administrator. Goodbye."
+      ));
     }
 
     const recentAttempts = await countRecentPhoneAttempts(callerNumber, 60).catch(() => 0);
     if (recentAttempts >= 5) {
       await logPhoneCallAttempt({ callerNumber, vapiCallId, userId: phoneUser.id, schoolId: phoneUser.schoolId ?? null, outcome: "rejected_rate_limit" }).catch(() => {});
       console.warn(`[Vapi] handoff rejected: rate limit for ${callerNumber}`);
-      return res.json({ error: "Rate limit exceeded" });
+      return res.json(rejectAtHandoff(
+        "Rate Limited",
+        "Too many calls from this number recently. Please try again later. Goodbye."
+      ));
     }
 
     if (phoneUser.schoolId) {
@@ -543,7 +561,10 @@ async function handleHandoffRequest(message, res) {
       if (usageStatus?.atCap) {
         await logPhoneCallAttempt({ callerNumber, vapiCallId, userId: phoneUser.id, schoolId: phoneUser.schoolId, outcome: "rejected_cap" }).catch(() => {});
         console.warn(`[Vapi] handoff rejected: school ${phoneUser.schoolId} at cap`);
-        return res.json({ error: "School usage cap reached" });
+        return res.json(rejectAtHandoff(
+          "School Cap Reached",
+          "Your school has reached its usage limit for this billing period. Please contact your administrator to raise the cap. Goodbye."
+        ));
       }
     }
 
