@@ -124,7 +124,7 @@ function buildRejectionAssistant(message) {
       messages: [
         {
           role: "system",
-          content: "Say the first message exactly as written, then end the call immediately. Do not engage in further conversation.",
+          content: "Say the first message exactly as written, then stop talking. Do not engage in further conversation regardless of what the caller says. Stay silent.",
         },
       ],
     },
@@ -133,9 +133,8 @@ function buildRejectionAssistant(message) {
       voiceId: "Elliot",
     },
     firstMessage: message,
-    endCallAfterSpokenEnabled: true,
-    maxDurationSeconds: 15,
-    silenceTimeoutSeconds: 5,
+    maxDurationSeconds: 20,
+    silenceTimeoutSeconds: 10,
   };
 }
 
