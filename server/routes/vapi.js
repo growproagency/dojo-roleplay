@@ -510,6 +510,47 @@ async function handleHandoffRequest(message, res) {
     return res.json({ error: "Invalid scenario" });
   }
 
+  // Inbound phone gate: with a static inbound assistant we can't reject at
+  // assistant-request time, so caller-ID whitelist + rate limit + school cap
+  // are enforced here instead. Returning { error } makes Vapi end the call
+  // without performing the handoff.
+  const callerNumber = call?.customer?.number;
+  if (call?.type === "inboundPhoneCall" && callerNumber) {
+    const phoneUser = await getUserByPhoneNumber(callerNumber).catch(() => null);
+
+    if (!phoneUser) {
+      await logPhoneCallAttempt({ callerNumber, vapiCallId, outcome: "rejected_unknown" }).catch(() => {});
+      console.warn(`[Vapi] handoff rejected: unknown caller ${callerNumber}`);
+      return res.json({ error: "Caller not registered with Dojo Roleplay" });
+    }
+
+    const isGlobalAdmin = phoneUser.role === "global_admin" || phoneUser.role === "admin";
+    if (!phoneUser.schoolId && !isGlobalAdmin) {
+      await logPhoneCallAttempt({ callerNumber, vapiCallId, userId: phoneUser.id, outcome: "rejected_unknown" }).catch(() => {});
+      console.warn(`[Vapi] handoff rejected: user ${phoneUser.id} not assigned to a school`);
+      return res.json({ error: "User not assigned to a school" });
+    }
+
+    const recentAttempts = await countRecentPhoneAttempts(callerNumber, 60).catch(() => 0);
+    if (recentAttempts >= 5) {
+      await logPhoneCallAttempt({ callerNumber, vapiCallId, userId: phoneUser.id, schoolId: phoneUser.schoolId ?? null, outcome: "rejected_rate_limit" }).catch(() => {});
+      console.warn(`[Vapi] handoff rejected: rate limit for ${callerNumber}`);
+      return res.json({ error: "Rate limit exceeded" });
+    }
+
+    if (phoneUser.schoolId) {
+      const usageStatus = await getSchoolUsageStatus(phoneUser.schoolId).catch(() => null);
+      if (usageStatus?.atCap) {
+        await logPhoneCallAttempt({ callerNumber, vapiCallId, userId: phoneUser.id, schoolId: phoneUser.schoolId, outcome: "rejected_cap" }).catch(() => {});
+        console.warn(`[Vapi] handoff rejected: school ${phoneUser.schoolId} at cap`);
+        return res.json({ error: "School usage cap reached" });
+      }
+    }
+
+    await logPhoneCallAttempt({ callerNumber, vapiCallId, userId: phoneUser.id, schoolId: phoneUser.schoolId ?? null, outcome: "accepted" }).catch(() => {});
+    setCallContext(vapiCallId, { userId: phoneUser.id, schoolId: phoneUser.schoolId ?? null });
+  }
+
   // Resolve tenant context. schoolId may be null for global-admin test calls;
   // we only require userId to identify who made the call.
   const tenant = await resolveTenantContext(message);
