@@ -358,7 +358,10 @@ Be concise. Once you know both the scenario and difficulty, immediately call the
       "status-update",
       "handoff-destination-request",
     ],
-    tools: [
+  };
+
+  if (ENV.vapiWebhookUrl) {
+    assistant.tools = [
       {
         type: "handoff",
         function: {
@@ -385,13 +388,15 @@ Be concise. Once you know both the scenario and difficulty, immediately call the
           {
             type: "dynamic",
             server: {
-              url: ENV.vapiWebhookUrl || "",
+              url: ENV.vapiWebhookUrl,
             },
           },
         ],
       },
-    ],
-  };
+    ];
+  } else {
+    console.warn("[Vapi] VAPI_WEBHOOK_URL not set — receptionist returned without handoff tool");
+  }
 
   // Wire the webhook URL so Vapi can send events for this assistant
   if (ENV.vapiWebhookUrl) {
