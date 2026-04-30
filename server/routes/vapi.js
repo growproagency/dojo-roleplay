@@ -82,12 +82,13 @@ async function resolveTenantContext(message) {
     }
   }
 
-  // 3. Phone call: caller ID lookup
+  // 3. Phone call: caller ID lookup. schoolId may be null for global admins;
+  // that's fine — they make untenanted test calls.
   const callerNumber = call?.customer?.number;
   if (callerNumber) {
     const user = await getUserByPhoneNumber(callerNumber).catch(() => null);
-    if (user && user.schoolId) {
-      const ctx = { userId: user.id, schoolId: user.schoolId };
+    if (user) {
+      const ctx = { userId: user.id, schoolId: user.schoolId ?? null };
       setCallContext(vapiCallId, ctx);
       return ctx;
     }
@@ -96,8 +97,8 @@ async function resolveTenantContext(message) {
   // 4. DB lookup by vapi_call_id (later events for an existing call row)
   if (vapiCallId) {
     const dbCall = await getCallByVapiId(vapiCallId).catch(() => null);
-    if (dbCall && dbCall.userId && dbCall.schoolId) {
-      const ctx = { userId: dbCall.userId, schoolId: dbCall.schoolId };
+    if (dbCall && dbCall.userId) {
+      const ctx = { userId: dbCall.userId, schoolId: dbCall.schoolId ?? null };
       setCallContext(vapiCallId, ctx);
       return ctx;
     }
@@ -216,7 +217,7 @@ async function handleAssistantRequest(message, res) {
 
     // Lookup user by phone number
     const user = await getUserByPhoneNumber(callerNumber).catch(() => null);
-    if (!user || !user.schoolId) {
+    if (!user) {
       await logPhoneCallAttempt({
         callerNumber,
         vapiCallId,
@@ -229,32 +230,71 @@ async function handleAssistantRequest(message, res) {
       });
     }
 
-    // Known user — but block if their school has hit its lifetime usage cap.
-    const usageStatus = await getSchoolUsageStatus(user.schoolId).catch(() => null);
-    if (usageStatus?.atCap) {
+    const isGlobalAdmin = user.role === "global_admin" || user.role === "admin";
+
+    // Staff/school admins must be assigned to a school. Global admins are
+    // exempt — they make untenanted test calls that don't count toward any
+    // school's usage.
+    if (!user.schoolId && !isGlobalAdmin) {
       await logPhoneCallAttempt({
         callerNumber,
         vapiCallId,
         userId: user.id,
-        schoolId: user.schoolId,
-        outcome: "rejected_cap",
+        outcome: "rejected_unknown",
       }).catch(() => {});
       return res.json({
         assistant: buildRejectionAssistant(
-          "Your school has reached its usage limit. Please contact your administrator to raise the cap. Goodbye."
+          "Sorry, your account isn't assigned to a school yet. Please contact your administrator. Goodbye."
         ),
       });
     }
 
-    // Known user — log + cache + return personalized receptionist
+    // Cap check only applies to school-attached users.
+    if (user.schoolId) {
+      const usageStatus = await getSchoolUsageStatus(user.schoolId).catch(() => null);
+      if (usageStatus?.atCap) {
+        await logPhoneCallAttempt({
+          callerNumber,
+          vapiCallId,
+          userId: user.id,
+          schoolId: user.schoolId,
+          outcome: "rejected_cap",
+        }).catch(() => {});
+        return res.json({
+          assistant: buildRejectionAssistant(
+            "Your school has reached its usage limit. Please contact your administrator to raise the cap. Goodbye."
+          ),
+        });
+      }
+    }
+
+    // Accepted — log + cache + return personalized receptionist
     await logPhoneCallAttempt({
       callerNumber,
       vapiCallId,
       userId: user.id,
-      schoolId: user.schoolId,
+      schoolId: user.schoolId ?? null,
       outcome: "accepted",
     }).catch(() => {});
-    setCallContext(vapiCallId, { userId: user.id, schoolId: user.schoolId });
+    setCallContext(vapiCallId, { userId: user.id, schoolId: user.schoolId ?? null });
+
+    // Create the call row up front so handoff can fall back to DB lookup
+    // if the in-memory cache is gone (e.g. Render restart between events).
+    // Scenario/difficulty are placeholders, overwritten at handoff time.
+    if (vapiCallId) {
+      try {
+        await createCall({
+          userId: user.id,
+          schoolId: user.schoolId ?? null,
+          scenario: "new_student",
+          difficulty: "medium",
+          vapiCallId,
+          status: "in_progress",
+        });
+      } catch (err) {
+        console.warn(`[Vapi] Failed to pre-create call row for ${vapiCallId}:`, err?.message || err);
+      }
+    }
 
     return res.json({ assistant: await buildReceptionistAssistant(user.name) });
   }
@@ -409,7 +449,7 @@ async function handleToolCalls(message, res) {
         continue;
       }
 
-      if (!tenant || !tenant.schoolId) {
+      if (!tenant || !tenant.userId) {
         console.warn(`[Vapi] tool-calls: no tenant context for call ${vapiCallId} — skipping DB write`);
         results.push({
           toolCallId: toolCall.id,
@@ -465,19 +505,27 @@ async function handleHandoffRequest(message, res) {
     return res.json({ error: "Invalid scenario" });
   }
 
-  // Resolve tenant context
+  // Resolve tenant context. schoolId may be null for global-admin test calls;
+  // we only require userId to identify who made the call.
   const tenant = await resolveTenantContext(message);
 
-  if (!tenant || !tenant.schoolId) {
+  if (!tenant || !tenant.userId) {
     console.warn(`[Vapi] handoff: no tenant context for call ${vapiCallId} — refusing handoff`);
     return res.json({ error: "Session not identified" });
   }
 
-  // Create call record (if not already created by tool-calls)
+  // Create call record (if not already created by assistant-request or tool-calls).
+  // Phone calls pre-create the row at assistant-request time with placeholder
+  // scenario/difficulty — overwrite them now that we know the caller's choice.
   let dbCall = await getCallByVapiId(vapiCallId).catch(() => null);
   let callDbId;
   if (dbCall) {
     callDbId = dbCall.id;
+    if (dbCall.scenario !== scenarioSlug || dbCall.difficulty !== difficulty) {
+      await updateCall(callDbId, { scenario: scenarioSlug, difficulty }).catch((err) => {
+        console.warn(`[Vapi] Failed to update scenario/difficulty on call ${callDbId}:`, err?.message || err);
+      });
+    }
   } else {
     callDbId = await createCall({
       userId: tenant.userId ?? null,
