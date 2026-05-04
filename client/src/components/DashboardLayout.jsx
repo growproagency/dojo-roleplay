@@ -37,7 +37,7 @@ const menuItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
   { icon: Phone, label: "Call History", path: "/calls" },
   { icon: Trophy, label: "Leaderboard", path: "/leaderboard" },
-  { icon: Users, label: "Members", path: "/members", requires: "schoolAdmin" },
+  { icon: Users, label: "Members", path: "/members", requires: "schoolAdmin", hidden: true },
   { icon: Settings, label: "School Settings", path: "/settings", requires: "schoolAdmin" },
   { icon: School, label: "All Schools", path: "/admin/schools", requires: "globalAdmin" },
   { icon: Drama, label: "Scenarios", path: "/admin/scenarios", requires: "globalAdmin" },
@@ -143,6 +143,7 @@ function DashboardLayoutContent({
   const isMobile = useIsMobile();
 
   const visibleMenuItems = menuItems.filter(item => {
+    if (item.hidden) return false;
     if (!item.requires) return true;
     if (item.requires === "globalAdmin") return isGlobalAdmin;
     if (item.requires === "schoolAdmin") return isSchoolAdmin;
