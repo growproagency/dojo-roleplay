@@ -12,7 +12,6 @@ import ScorecardDetail from "./pages/ScorecardDetail";
 import Settings from "./pages/Settings";
 import Leaderboard from "./pages/Leaderboard";
 import Usage from "./pages/Usage";
-import Members from "./pages/Members";
 import InviteAccept from "./pages/InviteAccept";
 import Profile from "./pages/Profile";
 import AdminSchools from "./pages/AdminSchools";
@@ -34,7 +33,6 @@ function Router() {
       <Route path="/settings" component={Settings} />
       <Route path="/leaderboard" component={Leaderboard} />
       <Route path="/usage" component={Usage} />
-      <Route path="/members" component={Members} />
       <Route path="/profile" component={Profile} />
       <Route path="/admin/schools" component={AdminSchools} />
       <Route path="/admin/schools/:id" component={AdminSchoolDetail} />
