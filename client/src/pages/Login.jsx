@@ -8,9 +8,11 @@ import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
 import { Loader2, School } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 
 export default function Login() {
   const [, setLocation] = useLocation();
+  const queryClient = useQueryClient();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isSignUp, setIsSignUp] = useState(false);
@@ -53,6 +55,7 @@ export default function Login() {
         // With email confirmation disabled, the user is immediately signed in
         if (data?.session) {
           toast.success("Account created!");
+          queryClient.removeQueries({ queryKey: ["auth", "me"] });
           setLocation(postLoginPath);
         } else {
           toast.success("Check your email for a confirmation link!");
@@ -60,6 +63,7 @@ export default function Login() {
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
+        queryClient.removeQueries({ queryKey: ["auth", "me"] });
         setLocation(postLoginPath);
       }
     } catch (err) {
