@@ -13,7 +13,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Settings2, ShieldAlert } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
+import { Settings2, ShieldAlert, Megaphone } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
@@ -44,6 +46,9 @@ export default function PlatformSettings() {
   const [defaultCap, setDefaultCap] = useState(() =>
     cached?.defaultUsageCapUsd != null ? String(cached.defaultUsageCapUsd) : ""
   );
+  const [maintenanceEnabled, setMaintenanceEnabled] = useState(() => Boolean(cached?.maintenanceEnabled));
+  const [maintenanceMessage, setMaintenanceMessage] = useState(() => cached?.maintenanceMessage ?? "");
+  const [maintenanceSeverity, setMaintenanceSeverity] = useState(() => cached?.maintenanceSeverity ?? "info");
 
   useEffect(() => {
     if (!authLoading && !isGlobalAdmin) setLocation("/dashboard");
@@ -61,7 +66,17 @@ export default function PlatformSettings() {
     setMarkup(String(settings.markupPercent ?? 0));
     setModel(settings.defaultLlmModel ?? SERVER_DEFAULT);
     setDefaultCap(settings.defaultUsageCapUsd != null ? String(settings.defaultUsageCapUsd) : "");
-  }, [settings?.markupPercent, settings?.defaultLlmModel, settings?.defaultUsageCapUsd]);
+    setMaintenanceEnabled(Boolean(settings.maintenanceEnabled));
+    setMaintenanceMessage(settings.maintenanceMessage ?? "");
+    setMaintenanceSeverity(settings.maintenanceSeverity ?? "info");
+  }, [
+    settings?.markupPercent,
+    settings?.defaultLlmModel,
+    settings?.defaultUsageCapUsd,
+    settings?.maintenanceEnabled,
+    settings?.maintenanceMessage,
+    settings?.maintenanceSeverity,
+  ]);
 
   const saveMutation = useMutation({
     mutationFn: (data) => updatePlatformSettings(data),
@@ -71,6 +86,8 @@ export default function PlatformSettings() {
       queryClient.invalidateQueries({ queryKey: ["schools-usage-overview"] });
       queryClient.invalidateQueries({ queryKey: ["usage"] });
       queryClient.invalidateQueries({ queryKey: ["auth", "me"] });
+      // Banner state may have changed — refresh on every page that mounts it.
+      queryClient.invalidateQueries({ queryKey: ["maintenance-notice"] });
       toast.success("Platform settings saved");
     },
     onError: (err) => toast.error(err.message || "Failed to save settings"),
@@ -93,10 +110,18 @@ export default function PlatformSettings() {
       }
       capValue = capN;
     }
+    const trimmedMessage = maintenanceMessage.trim();
+    if (maintenanceEnabled && !trimmedMessage) {
+      toast.error("Add a maintenance message before enabling the banner.");
+      return;
+    }
     saveMutation.mutate({
       markupPercent: markupN,
       defaultLlmModel: model === SERVER_DEFAULT ? null : model,
       defaultUsageCapUsd: capValue,
+      maintenanceEnabled,
+      maintenanceMessage: trimmedMessage || null,
+      maintenanceSeverity,
     });
   };
 
@@ -124,6 +149,7 @@ export default function PlatformSettings() {
           </p>
         </div>
 
+        <form onSubmit={handleSave} className="space-y-8">
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Configuration</CardTitle>
@@ -133,7 +159,7 @@ export default function PlatformSettings() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleSave} className="space-y-6">
+            <div className="space-y-6">
               {/* Markup */}
               <div className="space-y-1.5">
                 <Label htmlFor="markup">Pricing markup (%)</Label>
@@ -216,10 +242,77 @@ export default function PlatformSettings() {
                 </p>
               </div>
 
-              <Button type="submit" disabled={saveMutation.isPending || isLoading}>
-                {saveMutation.isPending ? "Saving…" : "Save changes"}
-              </Button>
-            </form>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Megaphone className="w-4 h-4 text-primary" />
+              Maintenance notice
+            </CardTitle>
+            <CardDescription className="text-xs">
+              Show a banner to all logged-in users (staff and school admins). Useful for
+              announcing scheduled or in-progress maintenance. The app stays usable — the
+              banner is informational only.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-6">
+              <div className="flex items-center justify-between gap-4">
+                <div className="space-y-0.5">
+                  <Label htmlFor="maintenanceEnabled" className="text-sm">Show banner</Label>
+                  <p className="text-xs text-muted-foreground">
+                    When on, every authenticated page shows the message below.
+                  </p>
+                </div>
+                <Switch
+                  id="maintenanceEnabled"
+                  checked={maintenanceEnabled}
+                  onCheckedChange={setMaintenanceEnabled}
+                  disabled={isLoading}
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="maintenanceSeverity">Severity</Label>
+                <Select
+                  value={maintenanceSeverity}
+                  onValueChange={setMaintenanceSeverity}
+                  disabled={isLoading}
+                >
+                  <SelectTrigger id="maintenanceSeverity" className="w-full max-w-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="info">Info — blue</SelectItem>
+                    <SelectItem value="warning">Warning — amber</SelectItem>
+                    <SelectItem value="critical">Critical — red</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Drives the banner color. Pick the level that matches the urgency.
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="maintenanceMessage">Message</Label>
+                <Textarea
+                  id="maintenanceMessage"
+                  value={maintenanceMessage}
+                  onChange={(e) => setMaintenanceMessage(e.target.value)}
+                  placeholder="Scheduled maintenance Friday May 8 at 2am UTC, ~30 minutes."
+                  maxLength={500}
+                  rows={3}
+                  disabled={isLoading}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Up to 500 characters. Editing the message re-shows the banner to users
+                  who already dismissed the previous version.
+                </p>
+              </div>
+            </div>
           </CardContent>
         </Card>
 
@@ -233,6 +326,13 @@ export default function PlatformSettings() {
             </div>
           </CardContent>
         </Card>
+
+        <div className="flex justify-end">
+          <Button type="submit" disabled={saveMutation.isPending || isLoading}>
+            {saveMutation.isPending ? "Saving…" : "Save changes"}
+          </Button>
+        </div>
+        </form>
       </div>
     </DashboardLayout>
   );

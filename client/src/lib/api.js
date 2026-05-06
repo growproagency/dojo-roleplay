@@ -73,6 +73,7 @@ export const fetchUsage = (params = {}) => {
   const query = qs.toString();
   return apiFetch(`/admin/usage${query ? `?${query}` : ""}`);
 };
+export const fetchMaintenanceNotice = () => apiFetch("/system/maintenance-notice");
 export const fetchVapiConfig = () => apiFetch("/vapi-config");
 export const fetchVapiAssistantOverrides = () => apiFetch("/vapi-config/overrides");
 export const fetchVapiSessionToken = () => apiFetch("/vapi-config/session-token", { method: "POST" });
