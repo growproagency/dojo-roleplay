@@ -1,10 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
-import { fetchSchool, fetchSchoolMembers, fetchSchoolInvites, fetchCalls } from "@/lib/api";
+import { fetchSchool, fetchCalls } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useLocation } from "wouter";
-import { CheckCircle2, Circle, Settings, UserPlus, Phone, BarChart3, Sparkles, X } from "lucide-react";
+import { CheckCircle2, Circle, Settings, Phone, BarChart3, Sparkles, X } from "lucide-react";
 import { useState, useEffect } from "react";
 
 const DISMISSED_KEY = "dojo:onboardingDismissed";
@@ -36,18 +36,6 @@ export default function OnboardingChecklist() {
     enabled: shouldRun,
   });
 
-  const { data: members } = useQuery({
-    queryKey: ["school", "members"],
-    queryFn: fetchSchoolMembers,
-    enabled: shouldRun,
-  });
-
-  const { data: invites } = useQuery({
-    queryKey: ["school", "invites"],
-    queryFn: fetchSchoolInvites,
-    enabled: shouldRun,
-  });
-
   const { data: calls } = useQuery({
     queryKey: ["calls"],
     queryFn: fetchCalls,
@@ -57,7 +45,6 @@ export default function OnboardingChecklist() {
   const schoolInfoDone =
     !!school && (school.name && school.name !== "Our Martial Arts School" && school.name !== "Default School") &&
     (school.streetAddress || school.city || school.introOffer);
-  const staffInvitedDone = (members && members.length > 1) || (invites && invites.length > 0);
   const testCallDone = (calls || []).length > 0;
   const scorecardDone = (calls || []).some(c => c.status === "scored");
 
@@ -70,15 +57,6 @@ export default function OnboardingChecklist() {
       icon: Settings,
       action: "Open settings",
       onClick: () => setLocation("/settings"),
-    },
-    {
-      id: "invite",
-      label: "Invite your staff",
-      description: "Send invite links to your team so they can start practicing.",
-      done: staffInvitedDone,
-      icon: UserPlus,
-      action: "Invite members",
-      onClick: () => setLocation("/members"),
     },
     {
       id: "call",

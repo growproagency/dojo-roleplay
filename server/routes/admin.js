@@ -56,6 +56,10 @@ const platformSettingsSchema = z.object({
   defaultLlmModel: z.string().min(1).max(64).nullable().optional(),
   // Null = no default cap (new schools start unrestricted).
   defaultUsageCapUsd: z.number().min(0).max(100000).nullable().optional(),
+  // Maintenance banner — shown to all authenticated users when enabled.
+  maintenanceEnabled: z.boolean().optional(),
+  maintenanceMessage: z.string().max(500).nullable().optional(),
+  maintenanceSeverity: z.enum(["info", "warning", "critical"]).optional(),
 });
 
 router.put("/platform-settings", async (req, res) => {

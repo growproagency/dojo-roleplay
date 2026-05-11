@@ -737,6 +737,9 @@ function toPlatformSettingsCamel(row) {
     markupPercent: row.markup_percent != null ? Number(row.markup_percent) : 0,
     defaultLlmModel: row.default_llm_model ?? null,
     defaultUsageCapUsd: row.default_usage_cap_usd != null ? Number(row.default_usage_cap_usd) : null,
+    maintenanceEnabled: Boolean(row.maintenance_enabled),
+    maintenanceMessage: row.maintenance_message ?? null,
+    maintenanceSeverity: row.maintenance_severity ?? "info",
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -773,6 +776,9 @@ export async function updatePlatformSettings(data) {
   if (data.markupPercent !== undefined) row.markup_percent = data.markupPercent;
   if (data.defaultLlmModel !== undefined) row.default_llm_model = data.defaultLlmModel;
   if (data.defaultUsageCapUsd !== undefined) row.default_usage_cap_usd = data.defaultUsageCapUsd;
+  if (data.maintenanceEnabled !== undefined) row.maintenance_enabled = data.maintenanceEnabled;
+  if (data.maintenanceMessage !== undefined) row.maintenance_message = data.maintenanceMessage;
+  if (data.maintenanceSeverity !== undefined) row.maintenance_severity = data.maintenanceSeverity;
   const { data: result, error } = await sb
     .from("platform_settings")
     .upsert(row, { onConflict: "id" })
@@ -782,6 +788,17 @@ export async function updatePlatformSettings(data) {
   // Invalidate the cache so the next read sees the new value immediately
   _platformSettingsCache = null;
   return toPlatformSettingsCamel(result);
+}
+
+// Public-ish read: returns only the maintenance fields (no markup/model/cap leak).
+// Reuses the same 30s cache as getPlatformSettings via the underlying call.
+export async function getMaintenanceNotice() {
+  const settings = await getPlatformSettings();
+  return {
+    enabled: Boolean(settings?.maintenanceEnabled),
+    message: settings?.maintenanceMessage ?? null,
+    severity: settings?.maintenanceSeverity ?? "info",
+  };
 }
 
 // Returns every school with their cumulative usage attached. One row per school.
